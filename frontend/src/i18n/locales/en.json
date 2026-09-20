@@ -32,6 +32,11 @@
     "newGraph": "Blank model: add nodes from the left panel and connect them to start checking.",
     "presetGraph": "Presets are read-only; clone one to edit and train.",
     "loadError": "Failed to load the workbench",
+    "panels": {
+      "hidden": "Collapsed",
+      "collapse": "Collapse {{name}}",
+      "restore": "Expand {{name}}"
+    },
     "zones": {
       "config": "Training config",
       "main": "Main view",

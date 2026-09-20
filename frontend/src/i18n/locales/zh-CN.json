@@ -32,6 +32,11 @@
     "newGraph": "空白模型：从左侧面板添加节点，连线后即开始试跑。",
     "presetGraph": "预置模型为只读；克隆为副本后可自由编辑并训练。",
     "loadError": "工作台加载失败",
+    "panels": {
+      "hidden": "已收起",
+      "collapse": "收起 {{name}}",
+      "restore": "展开 {{name}}"
+    },
     "zones": {
       "config": "训练配置",
       "main": "主视图",

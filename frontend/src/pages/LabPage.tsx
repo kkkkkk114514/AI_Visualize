@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
-import { Allotment } from "allotment";
+import { Allotment, type AllotmentHandle } from "allotment";
 import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router-dom";
 
@@ -9,6 +9,8 @@ import { AppHeader } from "../components/AppHeader";
 import { ConnectionStatus } from "../components/ConnectionStatus";
 import { DeviceBadge } from "../components/DeviceBadge";
 import { LanguageSwitch } from "../components/LanguageSwitch";
+import { HiddenPanelsStrip, PanelLayoutProvider, usePanelLayoutState } from "../components/panelLayout";
+import type { PanelId, PanelLayoutApi } from "../components/panelLayout";
 import { Panel } from "../components/Panel";
 import { GraphEditor } from "../panels/GraphEditor/GraphEditor";
 import { IssuesPanel } from "../panels/GraphEditor/IssuesPanel";
@@ -25,6 +27,26 @@ import { localizedText } from "../i18n/localized";
 import { useGraphStore } from "../stores/graphStore";
 import { useRunStore } from "../stores/runStore";
 
+type ColumnKey = "left" | "center" | "right";
+
+/** 三列的面板归属（与下方 JSX 的列结构、COLUMN_OF 保持一致）；整列收起与尺寸还原按此分组（docs/02 §9.2） */
+const COLUMN_PANES: Record<ColumnKey, PanelId[]> = {
+  left: ["nodes", "config"],
+  center: ["graph", "metrics", "probe"],
+  right: ["check", "nodeHelp", "runs"],
+};
+
+const COLUMN_OF: Record<PanelId, ColumnKey> = {
+  nodes: "left",
+  config: "left",
+  graph: "center",
+  metrics: "center",
+  probe: "center",
+  check: "right",
+  nodeHelp: "right",
+  runs: "right",
+};
+
 export default function LabPage() {
   const { t, i18n } = useTranslation();
   const { graphId = "new" } = useParams();
@@ -37,6 +59,65 @@ export default function LabPage() {
   const applyConfigDefaults = useRunStore((state) => state.applyConfigDefaults);
   const applyProbeDefaults = useRunStore((state) => state.applyProbeDefaults);
   const setDataset = useRunStore((state) => state.setDataset);
+  const panelLayout = usePanelLayoutState();
+  const isHidden = panelLayout.isHidden;
+  // 一列的面板全部收起时，整列一起收起，把宽度让给相邻列（docs/02 §9.2）
+  const columnHidden: Record<ColumnKey, boolean> = {
+    left: COLUMN_PANES.left.every(isHidden),
+    center: COLUMN_PANES.center.every(isHidden),
+    right: COLUMN_PANES.right.every(isHidden),
+  };
+  // 整列收起再恢复时 Allotment 的 cachedVisibleSize 已在级联中失真（逐个 setVisible(false)
+  // 会把腾出的高度先分给仍可见的兄弟面板，恢复时按失真值撑开、溢出后被压回最小尺寸）。
+  // 因此记住「整列都在」时的列内尺寸，恢复时用 resize() 还原（docs/02 §9.2）。
+  const columnRefs = useRef<Record<ColumnKey, AllotmentHandle | null>>({ left: null, center: null, right: null });
+  const pristineSizes = useRef<Partial<Record<ColumnKey, number[]>>>({});
+  const pendingResize = useRef(new Set<ColumnKey>());
+
+  const recordPristine = useCallback((col: ColumnKey, sizes: number[]) => {
+    const prev = pristineSizes.current[col];
+    pristineSizes.current[col] = sizes.map((size, i) => (size > 0 ? size : prev?.[i] ?? size));
+  }, []);
+
+  const layoutApi = useMemo<PanelLayoutApi>(
+    () => ({
+      ...panelLayout,
+      restore: (id) => {
+        const col = COLUMN_OF[id];
+        if (COLUMN_PANES[col].some(isHidden)) pendingResize.current.add(col);
+        panelLayout.restore(id);
+      },
+    }),
+    [panelLayout, isHidden],
+  );
+
+  useLayoutEffect(() => {
+    if (pendingResize.current.size === 0) return;
+    for (const col of [...pendingResize.current]) {
+      const pristine = pristineSizes.current[col];
+      if (!pristine) {
+        pendingResize.current.delete(col);
+        continue;
+      }
+      columnRefs.current[col]?.resize(COLUMN_PANES[col].map((id, i) => (isHidden(id) ? 0 : pristine[i])));
+      if (COLUMN_PANES[col].every((id) => !isHidden(id))) pendingResize.current.delete(col);
+    }
+  });
+
+  // 快照与还原都以像素尺寸判断可见性（可见面板有 minSize，尺寸为 0 只可能是收起）：
+  // Allotment 在 passive effect 里才换上新的 onChange 闭包，收起提交内的级联布局仍在用
+  // 上一轮闭包，读 render 里的 isHidden 会把级联出来的 0 当成可见尺寸记下来。恢复中的
+  // 列（pending）同样不记：恢复时级联出来的中间尺寸会覆盖掉真正要还原的快照（docs/02 §9.2）。
+  const columnBind = (col: ColumnKey) => ({
+    ref: (handle: AllotmentHandle | null) => {
+      columnRefs.current[col] = handle;
+    },
+    onChange: (sizes: number[]) => {
+      if (pendingResize.current.has(col) || !sizes.every((size) => size > 0)) return;
+      pristineSizes.current[col] = sizes;
+    },
+    onDragEnd: (sizes: number[]) => recordPristine(col, sizes),
+  });
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -116,77 +197,80 @@ export default function LabPage() {
         }
       />
       <RunControls />
-      <div className="lab-body">
-        {status === "error" ? (
-          <div className="error-state">
-            <span>
-              {t("lab.loadError")}：{loadError}
-            </span>
-            <Link className="btn" to="/">
-              {t("nav.backToLibrary")}
-            </Link>
-          </div>
-        ) : status === "loading" ? (
-          <div className="lab-loading">{t("common.loading")}</div>
-        ) : (
-          <ReactFlowProvider>
-            <Allotment>
-              <Allotment.Pane minSize={240} preferredSize="20%">
-                <Allotment vertical>
-                  <Allotment.Pane minSize={160}>
-                    <Panel title={t("lab.zones.nodes")}>
-                      <NodePalette />
-                    </Panel>
-                  </Allotment.Pane>
-                  <Allotment.Pane minSize={240}>
-                    <Panel title={t("lab.zones.config")}>
-                      <TrainingConfig />
-                    </Panel>
-                  </Allotment.Pane>
-                </Allotment>
-              </Allotment.Pane>
-              <Allotment.Pane minSize={460}>
-                <Allotment vertical>
-                  <Allotment.Pane minSize={200} preferredSize="46%">
-                    <Panel title={t("lab.zones.graph")}>
-                      <GraphEditor />
-                    </Panel>
-                  </Allotment.Pane>
-                  <Allotment.Pane minSize={150} preferredSize="26%">
-                    <Panel title={t("lab.zones.metrics")}>
-                      <MetricsCharts />
-                    </Panel>
-                  </Allotment.Pane>
-                  <Allotment.Pane minSize={150}>
-                    <Panel title={t("lab.zones.probe")}>
-                      <ProbeViewer />
-                    </Panel>
-                  </Allotment.Pane>
-                </Allotment>
-              </Allotment.Pane>
-              <Allotment.Pane minSize={300} preferredSize="26%">
-                <Allotment vertical>
-                  <Allotment.Pane minSize={120} preferredSize="30%">
-                    <Panel title={t("lab.zones.check")}>
-                      <IssuesPanel />
-                    </Panel>
-                  </Allotment.Pane>
-                  <Allotment.Pane minSize={140} preferredSize="34%">
-                    <Panel title={t("lab.zones.nodeHelp")}>
-                      <NodeDescriptions />
-                    </Panel>
-                  </Allotment.Pane>
-                  <Allotment.Pane minSize={140}>
-                    <Panel title={t("lab.zones.runs")}>
-                      <RunList />
-                    </Panel>
-                  </Allotment.Pane>
-                </Allotment>
-              </Allotment.Pane>
-            </Allotment>
-          </ReactFlowProvider>
-        )}
-      </div>
+      <PanelLayoutProvider value={layoutApi}>
+        <HiddenPanelsStrip />
+        <div className="lab-body">
+          {status === "error" ? (
+            <div className="error-state">
+              <span>
+                {t("lab.loadError")}：{loadError}
+              </span>
+              <Link className="btn" to="/">
+                {t("nav.backToLibrary")}
+              </Link>
+            </div>
+          ) : status === "loading" ? (
+            <div className="lab-loading">{t("common.loading")}</div>
+          ) : (
+            <ReactFlowProvider>
+              <Allotment>
+                <Allotment.Pane minSize={240} preferredSize="20%" visible={!columnHidden.left}>
+                  <Allotment vertical {...columnBind("left")}>
+                    <Allotment.Pane minSize={160} visible={!isHidden("nodes")}>
+                      <Panel id="nodes" title={t("lab.zones.nodes")}>
+                        <NodePalette />
+                      </Panel>
+                    </Allotment.Pane>
+                    <Allotment.Pane minSize={240} visible={!isHidden("config")}>
+                      <Panel id="config" title={t("lab.zones.config")}>
+                        <TrainingConfig />
+                      </Panel>
+                    </Allotment.Pane>
+                  </Allotment>
+                </Allotment.Pane>
+                <Allotment.Pane minSize={460} visible={!columnHidden.center}>
+                  <Allotment vertical {...columnBind("center")}>
+                    <Allotment.Pane minSize={200} preferredSize="46%" visible={!isHidden("graph")}>
+                      <Panel id="graph" title={t("lab.zones.graph")}>
+                        <GraphEditor />
+                      </Panel>
+                    </Allotment.Pane>
+                    <Allotment.Pane minSize={150} preferredSize="26%" visible={!isHidden("metrics")}>
+                      <Panel id="metrics" title={t("lab.zones.metrics")}>
+                        <MetricsCharts />
+                      </Panel>
+                    </Allotment.Pane>
+                    <Allotment.Pane minSize={150} visible={!isHidden("probe")}>
+                      <Panel id="probe" title={t("lab.zones.probe")}>
+                        <ProbeViewer />
+                      </Panel>
+                    </Allotment.Pane>
+                  </Allotment>
+                </Allotment.Pane>
+                <Allotment.Pane minSize={300} preferredSize="26%" visible={!columnHidden.right}>
+                  <Allotment vertical {...columnBind("right")}>
+                    <Allotment.Pane minSize={120} preferredSize="30%" visible={!isHidden("check")}>
+                      <Panel id="check" title={t("lab.zones.check")}>
+                        <IssuesPanel />
+                      </Panel>
+                    </Allotment.Pane>
+                    <Allotment.Pane minSize={140} preferredSize="34%" visible={!isHidden("nodeHelp")}>
+                      <Panel id="nodeHelp" title={t("lab.zones.nodeHelp")}>
+                        <NodeDescriptions />
+                      </Panel>
+                    </Allotment.Pane>
+                    <Allotment.Pane minSize={140} visible={!isHidden("runs")}>
+                      <Panel id="runs" title={t("lab.zones.runs")}>
+                        <RunList />
+                      </Panel>
+                    </Allotment.Pane>
+                  </Allotment>
+                </Allotment.Pane>
+              </Allotment>
+            </ReactFlowProvider>
+          )}
+        </div>
+      </PanelLayoutProvider>
     </div>
   );
 }
