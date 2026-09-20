@@ -305,6 +305,12 @@ class LSTMNode(_NodeBase):
 
 
 class MultiHeadAttentionNode(_NodeBase):
+    def __init__(self, node: Node, params: dict[str, Any]):
+        super().__init__(node, params)
+        # 采样步由探针置位：本步返回逐头注意力权重（供 attention 快照读取）
+        self.capture_attention = False
+        self.last_attn_weights: torch.Tensor | None = None
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
         x = self._require_float(self._require_tensor(x))
         self._require_ndim(x, 3)
@@ -330,6 +336,13 @@ class MultiHeadAttentionNode(_NodeBase):
                 torch.ones(seq_len, seq_len, dtype=torch.bool, device=x.device),
                 diagonal=1,
             )
+        if self.capture_attention:
+            out, weights = self.inner(
+                x, x, x, attn_mask=mask, need_weights=True, average_attn_weights=False
+            )
+            self.last_attn_weights = weights.detach()
+            return out
+        self.last_attn_weights = None
         out, _ = self.inner(x, x, x, attn_mask=mask, need_weights=False)
         return out
 

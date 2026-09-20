@@ -25,6 +25,7 @@ EVENT_BYE = "bye"
 
 # WS 线上事件名（docs/02 §8.2）：子进程的 status 事件对外发成 run.status
 WIRE_STATUS = "run.status"
+WIRE_PROBE = "probe.snapshot"
 WIRE_DELETED = "run.deleted"
 
 # 主进程 → 子进程控制命令（docs/02 §5.2）

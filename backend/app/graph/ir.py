@@ -578,10 +578,26 @@ def _reachable(graph: GraphIR, order: list[str], start: str) -> set[str]:
 
 
 def bind_dataset(graph: GraphIR, params_by_node: dict[str, dict[str, Any]], meta: dict[str, Any]) -> None:
-    """把数据集元数据写回 dataset_bound 参数（docs/02 §4.1）：Input.shape / Output.classes / Embedding 词表。"""
+    """把数据集元数据写回 dataset_bound 参数（docs/02 §3.4）：
+    Input.shape / Output.classes / Embedding 词表 / 直连 Output 的 Linear 分类头。"""
     shape = meta.get("input_shape")
     num_classes = meta.get("num_classes")
     vocab_size = meta.get("vocab_size")
+
+    output_params = {
+        node.id: params_by_node[node.id]
+        for node in graph.nodes
+        if node.type == "Output" and node.id in params_by_node
+    }
+    head_ids: set[str] = set()
+    for edge in graph.edges:
+        target_params = output_params.get(edge.target)
+        if target_params is None or target_params.get("out_dim"):
+            continue  # 回归头（out_dim > 0）不对齐类别数
+        source = graph.node(edge.source)
+        if source is not None:
+            head_ids.add(source.id)
+
     for node in graph.nodes:
         params = params_by_node.get(node.id)
         if params is None:
@@ -593,6 +609,8 @@ def bind_dataset(graph: GraphIR, params_by_node: dict[str, dict[str, Any]], meta
                 params["classes"] = int(num_classes)
         elif node.type == "Embedding" and vocab_size:
             params["num_embeddings"] = int(vocab_size)
+        elif node.type == "Linear" and node.id in head_ids and num_classes:
+            params["out_features"] = int(num_classes)
 
 
 def load_preset(model_id: str) -> GraphIR | None:

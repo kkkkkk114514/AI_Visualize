@@ -1,0 +1,438 @@
+{
+  "ir_version": 1,
+  "id": "gpt-char",
+  "kind": "dl",
+  "task": "text_lm",
+  "name": {
+    "zh": "字符级小 GPT",
+    "en": "Char-level Small GPT"
+  },
+  "desc": {
+    "zh": "2 层 Transformer（4 头因果注意力，d=64）+ 字符级下一字符预测，默认配《爱丽丝梦游仙境》语料",
+    "en": "Two transformer blocks (4 causal heads, d=64) predicting the next character; defaults to the Alice corpus"
+  },
+  "dataset_id": "alice",
+  "hyper_defaults": {
+    "optimizer": "adamw",
+    "lr": 0.003,
+    "batch_size": 32,
+    "epochs": 5,
+    "loss": "cross_entropy",
+    "grad_clip": 1.0,
+    "train_size": 3000,
+    "val_size": 500
+  },
+  "probe_defaults": [
+    "attn1",
+    "attn2"
+  ],
+  "nodes": [
+    {
+      "id": "input",
+      "type": "Input",
+      "params": {
+        "shape": [
+          32
+        ]
+      },
+      "ui": {
+        "x": 0,
+        "y": 140
+      }
+    },
+    {
+      "id": "emb",
+      "type": "Embedding",
+      "params": {
+        "num_embeddings": 76,
+        "embedding_dim": 64
+      },
+      "ui": {
+        "x": 220,
+        "y": 140
+      }
+    },
+    {
+      "id": "pos",
+      "type": "PositionalEncoding",
+      "params": {
+        "max_len": 32,
+        "mode": "learned"
+      },
+      "ui": {
+        "x": 440,
+        "y": 140
+      }
+    },
+    {
+      "id": "attn1",
+      "type": "MultiHeadAttention",
+      "params": {
+        "num_heads": 4,
+        "causal": true,
+        "dropout": 0.0
+      },
+      "ui": {
+        "x": 660,
+        "y": 40
+      }
+    },
+    {
+      "id": "add1",
+      "type": "ResidualAdd",
+      "params": {},
+      "ui": {
+        "x": 880,
+        "y": 140
+      }
+    },
+    {
+      "id": "norm1",
+      "type": "LayerNorm",
+      "params": {
+        "normalized_shape": 0
+      },
+      "ui": {
+        "x": 1100,
+        "y": 140
+      }
+    },
+    {
+      "id": "fc1",
+      "type": "Linear",
+      "params": {
+        "out_features": 256,
+        "bias": true
+      },
+      "ui": {
+        "x": 1320,
+        "y": 240
+      }
+    },
+    {
+      "id": "gelu1",
+      "type": "Activation",
+      "params": {
+        "name": "gelu"
+      },
+      "ui": {
+        "x": 1540,
+        "y": 240
+      }
+    },
+    {
+      "id": "fc2",
+      "type": "Linear",
+      "params": {
+        "out_features": 64,
+        "bias": true
+      },
+      "ui": {
+        "x": 1760,
+        "y": 240
+      }
+    },
+    {
+      "id": "add2",
+      "type": "ResidualAdd",
+      "params": {},
+      "ui": {
+        "x": 1980,
+        "y": 140
+      }
+    },
+    {
+      "id": "norm2",
+      "type": "LayerNorm",
+      "params": {
+        "normalized_shape": 0
+      },
+      "ui": {
+        "x": 2200,
+        "y": 140
+      }
+    },
+    {
+      "id": "attn2",
+      "type": "MultiHeadAttention",
+      "params": {
+        "num_heads": 4,
+        "causal": true,
+        "dropout": 0.0
+      },
+      "ui": {
+        "x": 2420,
+        "y": 40
+      }
+    },
+    {
+      "id": "add3",
+      "type": "ResidualAdd",
+      "params": {},
+      "ui": {
+        "x": 2640,
+        "y": 140
+      }
+    },
+    {
+      "id": "norm3",
+      "type": "LayerNorm",
+      "params": {
+        "normalized_shape": 0
+      },
+      "ui": {
+        "x": 2860,
+        "y": 140
+      }
+    },
+    {
+      "id": "fc3",
+      "type": "Linear",
+      "params": {
+        "out_features": 256,
+        "bias": true
+      },
+      "ui": {
+        "x": 3080,
+        "y": 240
+      }
+    },
+    {
+      "id": "gelu2",
+      "type": "Activation",
+      "params": {
+        "name": "gelu"
+      },
+      "ui": {
+        "x": 3300,
+        "y": 240
+      }
+    },
+    {
+      "id": "fc4",
+      "type": "Linear",
+      "params": {
+        "out_features": 64,
+        "bias": true
+      },
+      "ui": {
+        "x": 3520,
+        "y": 240
+      }
+    },
+    {
+      "id": "add4",
+      "type": "ResidualAdd",
+      "params": {},
+      "ui": {
+        "x": 3740,
+        "y": 140
+      }
+    },
+    {
+      "id": "norm4",
+      "type": "LayerNorm",
+      "params": {
+        "normalized_shape": 0
+      },
+      "ui": {
+        "x": 3960,
+        "y": 140
+      }
+    },
+    {
+      "id": "head",
+      "type": "Linear",
+      "params": {
+        "out_features": 76,
+        "bias": true
+      },
+      "ui": {
+        "x": 4180,
+        "y": 140
+      }
+    },
+    {
+      "id": "output",
+      "type": "Output",
+      "params": {
+        "classes": 76,
+        "out_dim": 0
+      },
+      "ui": {
+        "x": 4400,
+        "y": 140
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "input",
+      "source_port": "out",
+      "target": "emb",
+      "target_port": "in"
+    },
+    {
+      "id": "e2",
+      "source": "emb",
+      "source_port": "out",
+      "target": "pos",
+      "target_port": "in"
+    },
+    {
+      "id": "e3",
+      "source": "pos",
+      "source_port": "out",
+      "target": "attn1",
+      "target_port": "in"
+    },
+    {
+      "id": "e4",
+      "source": "pos",
+      "source_port": "out",
+      "target": "add1",
+      "target_port": "in1"
+    },
+    {
+      "id": "e5",
+      "source": "attn1",
+      "source_port": "out",
+      "target": "add1",
+      "target_port": "in2"
+    },
+    {
+      "id": "e6",
+      "source": "add1",
+      "source_port": "out",
+      "target": "norm1",
+      "target_port": "in"
+    },
+    {
+      "id": "e7",
+      "source": "norm1",
+      "source_port": "out",
+      "target": "fc1",
+      "target_port": "in"
+    },
+    {
+      "id": "e8",
+      "source": "fc1",
+      "source_port": "out",
+      "target": "gelu1",
+      "target_port": "in"
+    },
+    {
+      "id": "e9",
+      "source": "gelu1",
+      "source_port": "out",
+      "target": "fc2",
+      "target_port": "in"
+    },
+    {
+      "id": "e10",
+      "source": "norm1",
+      "source_port": "out",
+      "target": "add2",
+      "target_port": "in1"
+    },
+    {
+      "id": "e11",
+      "source": "fc2",
+      "source_port": "out",
+      "target": "add2",
+      "target_port": "in2"
+    },
+    {
+      "id": "e12",
+      "source": "add2",
+      "source_port": "out",
+      "target": "norm2",
+      "target_port": "in"
+    },
+    {
+      "id": "e13",
+      "source": "norm2",
+      "source_port": "out",
+      "target": "attn2",
+      "target_port": "in"
+    },
+    {
+      "id": "e14",
+      "source": "norm2",
+      "source_port": "out",
+      "target": "add3",
+      "target_port": "in1"
+    },
+    {
+      "id": "e15",
+      "source": "attn2",
+      "source_port": "out",
+      "target": "add3",
+      "target_port": "in2"
+    },
+    {
+      "id": "e16",
+      "source": "add3",
+      "source_port": "out",
+      "target": "norm3",
+      "target_port": "in"
+    },
+    {
+      "id": "e17",
+      "source": "norm3",
+      "source_port": "out",
+      "target": "fc3",
+      "target_port": "in"
+    },
+    {
+      "id": "e18",
+      "source": "fc3",
+      "source_port": "out",
+      "target": "gelu2",
+      "target_port": "in"
+    },
+    {
+      "id": "e19",
+      "source": "gelu2",
+      "source_port": "out",
+      "target": "fc4",
+      "target_port": "in"
+    },
+    {
+      "id": "e20",
+      "source": "norm3",
+      "source_port": "out",
+      "target": "add4",
+      "target_port": "in1"
+    },
+    {
+      "id": "e21",
+      "source": "fc4",
+      "source_port": "out",
+      "target": "add4",
+      "target_port": "in2"
+    },
+    {
+      "id": "e22",
+      "source": "add4",
+      "source_port": "out",
+      "target": "norm4",
+      "target_port": "in"
+    },
+    {
+      "id": "e23",
+      "source": "norm4",
+      "source_port": "out",
+      "target": "head",
+      "target_port": "in"
+    },
+    {
+      "id": "e24",
+      "source": "head",
+      "source_port": "out",
+      "target": "output",
+      "target_port": "in"
+    }
+  ]
+}

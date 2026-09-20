@@ -14,15 +14,18 @@ def run_dir(run_id: str) -> Path:
     return config.RUNS_DIR / run_id
 
 
+def snapshot_dir(run_id: str) -> Path:
+    return run_dir(run_id) / "snapshots"
+
+
 def ensure_run_dir(run_id: str) -> Path:
-    root = run_dir(run_id)
-    (root / "snapshots").mkdir(parents=True, exist_ok=True)
-    (root / "checkpoints").mkdir(parents=True, exist_ok=True)
-    return root
+    snapshot_dir(run_id).mkdir(parents=True, exist_ok=True)
+    (run_dir(run_id) / "checkpoints").mkdir(parents=True, exist_ok=True)
+    return run_dir(run_id)
 
 
 def snapshot_path(run_id: str, snapshot_id: str) -> Path:
-    return run_dir(run_id) / "snapshots" / f"{snapshot_id}.json"
+    return snapshot_dir(run_id) / f"{snapshot_id}.json"
 
 
 def checkpoint_path(run_id: str) -> Path:

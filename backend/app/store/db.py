@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS models (
 CREATE TABLE IF NOT EXISTS runs (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, kind TEXT NOT NULL,
   model_id TEXT, graph_json TEXT,
-  dataset_id TEXT, hyperparams_json TEXT, status TEXT NOT NULL,
+  dataset_id TEXT, hyperparams_json TEXT, probes_json TEXT, status TEXT NOT NULL,
   device TEXT, seed INTEGER, created_at TEXT, started_at TEXT, finished_at TEXT,
   error TEXT, best_metric REAL, total_steps INTEGER
 );
@@ -46,6 +46,7 @@ RUN_FIELDS: tuple[str, ...] = (
     "graph_json",
     "dataset_id",
     "hyperparams_json",
+    "probes_json",
     "status",
     "device",
     "seed",
@@ -64,6 +65,7 @@ RUN_SUMMARY_FIELDS: tuple[str, ...] = (
     "model_id",
     "dataset_id",
     "hyperparams_json",
+    "probes_json",
     "status",
     "device",
     "seed",
@@ -107,8 +109,17 @@ def init_db() -> None:
     with _lock:
         conn = connect()
         conn.executescript(SCHEMA)
+        _migrate(conn)
         conn.commit()
     log.info("SQLite 就绪：%s", config.DB_PATH)
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """启动期轻量迁移（docs/02 §7.2）：缺列则 ALTER TABLE 补上，老库自动升级。"""
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(runs)")}
+    if "probes_json" not in columns:
+        conn.execute("ALTER TABLE runs ADD COLUMN probes_json TEXT")
+        log.info("迁移：runs.probes_json 已补齐")
 
 
 def close() -> None:
@@ -133,6 +144,14 @@ def _decode_run(row: sqlite3.Row) -> dict[str, Any]:
             data["hyperparams"] = {}
     else:
         data["hyperparams"] = {}
+    if data.get("probes_json"):
+        try:
+            probes = json.loads(data["probes_json"])
+            data["probes"] = probes if isinstance(probes, list) else []
+        except json.JSONDecodeError:
+            data["probes"] = []
+    else:
+        data["probes"] = []
     return data
 
 

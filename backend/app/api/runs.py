@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 
 from app import config
@@ -39,6 +39,7 @@ def _summary(record: dict[str, Any]) -> dict[str, Any]:
         "model_id": record.get("model_id"),
         "dataset_id": record.get("dataset_id"),
         "hyperparams": record.get("hyperparams") or {},
+        "probes": record.get("probes") or [],
         "status": record["status"],
         "device": record.get("device"),
         "seed": record.get("seed"),
@@ -146,14 +147,26 @@ async def list_snapshots(
 
 
 @router.get("/{run_id}/snapshots/{snapshot_id}")
-async def get_snapshot(run_id: str, snapshot_id: str) -> Any:
+async def get_snapshot(run_id: str, snapshot_id: str, request: Request) -> Any:
     record = db.get_snapshot(snapshot_id)
     if record is None or record["run_id"] != run_id:
         return _error(404, "snapshot_not_found", "errors.snapshot.notFound", {"id": snapshot_id})
     path = files.snapshot_path(run_id, snapshot_id)
     if not path.is_file():
         return _error(404, "snapshot_not_found", "errors.snapshot.notFound", {"id": snapshot_id})
-    return FileResponse(path, media_type="application/json")
+    # 快照一次写定、内容不可变（docs/02 §6.3）：强 ETag + 长缓存，命中即 304
+    etag = f'"{snapshot_id}"'
+    headers = {"ETag": etag, "Cache-Control": "public, max-age=31536000, immutable"}
+    if _etag_matches(request.headers.get("if-none-match"), etag):
+        return Response(status_code=304, headers=headers)
+    return FileResponse(path, media_type="application/json", headers=headers)
+
+
+def _etag_matches(header: str | None, etag: str) -> bool:
+    if not header:
+        return False
+    candidates = [item.strip() for item in header.split(",")]
+    return etag in candidates or f"W/{etag}" in candidates or "*" in candidates
 
 
 @router.delete("/{run_id}")

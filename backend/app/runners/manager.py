@@ -17,6 +17,7 @@ from app.api.ws import hub
 from app.datasets import registry
 from app.graph.ir import IRParseError, GraphIR, parse_graph, validate_graph
 from app.metrics import METRIC_NAMES
+from app.probes import hooks as probe_hooks
 from app.runners import base, torch_runner
 from app.store import db, files
 
@@ -176,6 +177,13 @@ class RunnerManager:
         except base.HyperError as exc:
             raise RunError(422, exc.message_key, exc.message_key, exc.error_args, exc.detail) from exc
 
+        try:
+            probe_specs = probe_hooks.resolve_probes(body.get("probes"), graph)
+        except probe_hooks.ProbeError as exc:
+            raise RunError(
+                422, "invalid_probe", exc.message_key, exc.error_args, exc.detail
+            ) from exc
+
         seed_value = body.get("seed")
         seed = (
             int(seed_value)
@@ -187,6 +195,7 @@ class RunnerManager:
 
         run_id = db.new_run_id()
         files.ensure_run_dir(run_id)
+        probe_payload = [spec.to_dict() for spec in probe_specs]
         db.insert_run(
             {
                 "id": run_id,
@@ -196,6 +205,7 @@ class RunnerManager:
                 "graph_json": json.dumps(graph.to_dict(), ensure_ascii=False),
                 "dataset_id": spec.id,
                 "hyperparams_json": json.dumps(hyper, ensure_ascii=False),
+                "probes_json": json.dumps(probe_payload, ensure_ascii=False),
                 "status": base.STATUS_CREATED,
                 "device": None,
                 "seed": seed,
@@ -218,6 +228,8 @@ class RunnerManager:
             "hyperparams": hyper,
             "seed": seed,
             "checkpoint_path": str(files.checkpoint_path(run_id)),
+            "snapshots_dir": str(files.snapshot_dir(run_id)),
+            "probes": probe_payload,
         }
         try:
             process = context.Process(
@@ -450,7 +462,39 @@ class RunnerManager:
             )[:1000]
             db.update_run(run.run_id, error=run.error)
 
-        if event_type in (base.EVENT_LOG, base.EVENT_ERROR, base.EVENT_PROBE):
+        if event_type == base.EVENT_PROBE:
+            snapshot_id = str(event.get("snapshot_id"))
+            db.insert_snapshot(
+                {
+                    "id": snapshot_id,
+                    "run_id": run.run_id,
+                    "step": int(event.get("step") or 0),
+                    "epoch": event.get("epoch"),
+                    "node_id": event.get("node_id"),
+                    "kind": event.get("kind"),
+                    "shape": event.get("shape") or [],
+                    "min": event.get("min"),
+                    "max": event.get("max"),
+                    "file_path": event.get("file_path") or str(files.snapshot_path(run.run_id, snapshot_id)),
+                    "created_at": db.now_iso(),
+                }
+            )
+            # 线上只推元数据（docs/02 §6.3 / §8.2）：payload 由前端按需带 ETag 拉取
+            self._broadcast(
+                {
+                    "type": base.WIRE_PROBE,
+                    "run_id": run.run_id,
+                    "snapshot_id": snapshot_id,
+                    "step": int(event.get("step") or 0),
+                    "epoch": event.get("epoch"),
+                    "node_id": event.get("node_id"),
+                    "kind": event.get("kind"),
+                    "shape": event.get("shape") or [],
+                }
+            )
+            return
+
+        if event_type in (base.EVENT_LOG, base.EVENT_ERROR):
             payload = dict(event)
             payload["run_id"] = run.run_id
             self._broadcast(payload)

@@ -17,7 +17,9 @@ from app import config as app_config
 from app.datasets import loaders, registry
 from app.graph.ir import bind_dataset, parse_graph, validate_graph
 from app.graph.module import NodeExecutionError, build_graph_module
+from app.probes import hooks as probe_hooks
 from app.runners import base
+from app.store import files
 
 log = logging.getLogger(__name__)
 
@@ -117,6 +119,20 @@ def _batch_accuracy(output: torch.Tensor, target: torch.Tensor) -> float:
     return float((output.argmax(dim=-1) == target).to(torch.float32).mean().item())
 
 
+def _is_sequence(meta: dict[str, Any]) -> bool:
+    """字符级语言模型：logits (B,T,V) / target (B,T)，loss 按 token 展平。"""
+    return meta.get("loader") == "text_char"
+
+
+def _loss_inputs(
+    output: torch.Tensor, target: torch.Tensor, sequence: bool
+) -> tuple[torch.Tensor, torch.Tensor]:
+    # CrossEntropyLoss 的类别维固定在第 1 维，序列 logits 需从 (B,T,V) 展平成 (B*T,V)
+    if not sequence:
+        return output, target
+    return output.reshape(-1, output.shape[-1]), target.reshape(-1)
+
+
 def _evaluate(
     model: nn.Module,
     loader: Any,
@@ -129,18 +145,20 @@ def _evaluate(
     total_loss = 0.0
     correct = 0
     count = 0
+    sequence = _is_sequence(meta)
     with torch.no_grad():
         for batch_x, batch_y in loader:
             batch_x = loaders.normalize(batch_x.to(device), meta)
             batch_y = batch_y.to(device)
             output = model(batch_x)
             target = batch_y if classification else batch_y.to(torch.float32)
-            loss = loss_fn(output, target)
-            size = int(batch_x.shape[0])
-            total_loss += float(loss.item()) * size
+            loss = loss_fn(*_loss_inputs(output, target, sequence))
+            # 序列任务（语言模型）的 target 是 (B,T)，loss 与准确率按 token 数加权
+            elements = int(batch_y.numel()) if classification else int(batch_x.shape[0])
+            total_loss += float(loss.item()) * elements
             if classification:
                 correct += int((output.argmax(dim=-1) == batch_y).sum().item())
-            count += size
+            count += elements
     model.train()
     if count == 0:
         return 0.0, (0.0 if classification else None)
@@ -251,10 +269,37 @@ def run_training(config: dict[str, Any], event_queue: Any, control_queue: Any) -
                 "args": {"train": info["train_samples"], "val": info["val_samples"]},
             }
         )
+        if info.get("vocab_size"):
+            event_queue.put(
+                {
+                    "type": base.EVENT_LOG,
+                    "level": "info",
+                    "key": "log.run.textCorpus",
+                    "args": {"vocab_size": info["vocab_size"], "seq_len": info.get("seq_len")},
+                }
+            )
 
         state = _Control(lr=float(hyper["lr"]))
         batch_size = int(hyper["batch_size"])
         step_times: deque[float] = deque(maxlen=base.THROUGHPUT_WINDOW)
+        sequence = _is_sequence(meta)
+        probe_engine = probe_hooks.ProbeEngine(
+            probe_hooks.resolve_probes(config.get("probes"), graph),
+            model,
+            {node.id: node.type for node in graph.nodes},
+            run_id=run_id,
+            snapshots_dir=config.get("snapshots_dir") or files.snapshot_dir(run_id),
+            emit=event_queue.put,
+        )
+        if probe_engine.active():
+            event_queue.put(
+                {
+                    "type": base.EVENT_LOG,
+                    "level": "info",
+                    "key": "log.probe.attached",
+                    "args": {"n": len(probe_engine.spec_payload())},
+                }
+            )
         model.train()
 
         for epoch in range(1, int(hyper["epochs"]) + 1):
@@ -308,8 +353,13 @@ def run_training(config: dict[str, Any], event_queue: Any, control_queue: Any) -
                 batch_x = loaders.normalize(batch_x.to(device), meta)
                 batch_y = batch_y.to(device)
                 optimizer.zero_grad(set_to_none=True)
-                output = model(batch_x)
-                loss = loss_fn(output, batch_y)
+                # 探针：只在采样步挂 hook，前向一结束立即摘除（docs/02 §6.1）
+                probe_engine.begin_step(step + 1, epoch)
+                try:
+                    output = model(batch_x)
+                finally:
+                    probe_engine.end_step()
+                loss = loss_fn(*_loss_inputs(output, batch_y, sequence))
                 loss.backward()
                 if hyper["grad_clip"] > 0:
                     grad_norm = float(

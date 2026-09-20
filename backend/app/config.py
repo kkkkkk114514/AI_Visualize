@@ -11,6 +11,7 @@ RUNS_DIR = DATA_DIR / "runs"
 DATASETS_DIR = DATA_DIR / "datasets"
 DB_PATH = DATA_DIR / "app.db"
 PRESETS_DIR = BACKEND_DIR / "app" / "graph" / "presets"
+CORPORA_DIR = BACKEND_DIR / "app" / "datasets" / "corpora"
 FRONTEND_DIST = REPO_ROOT / "frontend" / "dist"
 
 HOST = os.environ.get("AI_VISUALIZE_HOST", "127.0.0.1")
@@ -34,6 +35,11 @@ TORCH_THREADS = int(
 METRICS_FLUSH_INTERVAL_S = 2.0
 METRICS_FLUSH_ROWS = 200
 METRICS_MAX_POINTS = 2000
+
+# 探针采样（docs/02 §6.1）
+PROBE_DEFAULT_EVERY_N = 50
+PROBE_MAX_PER_STREAM = 200
+PROBE_MAX_ITEMS = 32
 
 # 数据集镜像（按顺序回退；官方 ossci 镜像与 fgnt/mnist 内容同 md5）
 DATASET_TIMEOUT_S = 30.0
