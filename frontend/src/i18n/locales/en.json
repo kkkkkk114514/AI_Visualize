@@ -15,16 +15,30 @@
       "dl": "Deep Learning",
       "rl": "Reinforcement Learning"
     },
+    "source": {
+      "preset": "Preset",
+      "user": "Mine"
+    },
     "empty": "No preset models yet",
     "loadError": "Failed to load the model library",
     "retry": "Retry"
   },
   "lab": {
     "title": "Workbench",
+    "untitled": "Untitled model",
+    "readOnly": "Read-only preset",
+    "unsaved": "Unsaved changes",
+    "cloneAsCopy": "Clone as copy",
+    "newGraph": "Blank model: add nodes from the left panel and connect them to start checking.",
+    "presetGraph": "Presets are read-only; clone one to edit and train.",
+    "loadError": "Failed to load the workbench",
     "zones": {
       "config": "Config",
       "main": "Main view",
-      "metrics": "Metrics & probes"
+      "metrics": "Metrics & probes",
+      "nodes": "Nodes",
+      "graph": "Graph editor",
+      "check": "Checks"
     },
     "empty": {
       "config": "Nothing to configure",
@@ -58,6 +72,136 @@
     "connected": "Connected",
     "connecting": "Connecting",
     "disconnected": "Disconnected"
+  },
+  "nodes": {
+    "category": {
+      "io": "Input / Output",
+      "basic": "Basic",
+      "conv": "Conv & pooling",
+      "norm": "Normalization",
+      "seq": "Sequence",
+      "combine": "Combine"
+    }
+  },
+  "param": {
+    "shape": "Shape",
+    "outDim": "Output dim (0 = classes)",
+    "classes": "Classes",
+    "outFeatures": "Out features",
+    "bias": "Bias",
+    "startDim": "Start dim",
+    "dropoutP": "Dropout p",
+    "activation": "Activation",
+    "outChannels": "Out channels",
+    "kernelSize": "Kernel size",
+    "stride": "Stride",
+    "padding": "Padding",
+    "dilation": "Dilation",
+    "outputSize": "Output size",
+    "eps": "eps",
+    "momentum": "Momentum",
+    "normalizedShape": "Normalized shape (empty = last)",
+    "numEmbeddings": "Vocab size",
+    "embeddingDim": "Embedding dim",
+    "maxLen": "Max length",
+    "posMode": "Position encoding",
+    "hiddenSize": "Hidden size",
+    "numLayers": "Layers",
+    "bidirectional": "Bidirectional",
+    "returnSequences": "Return sequences",
+    "numHeads": "Heads",
+    "causal": "Causal mask",
+    "dim": "Concat dim"
+  },
+  "activation": {
+    "relu": "ReLU",
+    "leaky_relu": "LeakyReLU",
+    "gelu": "GELU",
+    "tanh": "Tanh",
+    "sigmoid": "Sigmoid"
+  },
+  "posMode": {
+    "learned": "Learned",
+    "sinusoidal": "Sinusoidal"
+  },
+  "editor": {
+    "autoLayout": "Auto layout",
+    "undo": "Undo",
+    "redo": "Redo",
+    "shortcuts": "Shortcuts: Ctrl+Z undo · Ctrl+Y redo · Ctrl+C/V copy-paste · Delete",
+    "readOnlyPaletteHint": "Presets are read-only — clone one to edit",
+    "datasetBound": "Shape comes from the dataset and cannot be edited",
+    "zeroMeansKernel": "Empty means kernel size",
+    "multiInput": "multi-in",
+    "shapeIn": "Input shape (B = batch)",
+    "shapeOut": "Output shape",
+    "paramsCount": "Trainable parameters",
+    "issueErrors_one": "{{count}} error",
+    "issueErrors_other": "{{count}} errors",
+    "issueWarnings_one": "{{count}} warning",
+    "issueWarnings_other": "{{count}} warnings",
+    "noErrors": "No errors",
+    "noIssues": "No issues",
+    "checking": "Checking…",
+    "checkMs": "{{ms}} ms",
+    "notChecked": "Not checked",
+    "networkError": "Cannot reach the backend: {{detail}}",
+    "totalParams": "Total params",
+    "edge": "Edge"
+  },
+  "errors": {
+    "kind": {
+      "classification": "classification",
+      "regression": "regression"
+    },
+    "graph": {
+      "empty": "Graph is empty: needs at least an Input and an Output",
+      "notObject": "IR must be a JSON object (got {{detail}})",
+      "badNode": "Malformed node: {{detail}}",
+      "badEdge": "Malformed edge: {{detail}}",
+      "duplicateNode": "Duplicate node id",
+      "duplicateEdge": "Duplicate edge id",
+      "unknownType": "Unknown node type: {{type}}",
+      "missingInput": "Missing Input node",
+      "multipleInput": "Exactly one Input node allowed (found {{count}})",
+      "missingOutput": "Missing Output node",
+      "multipleOutput": "Exactly one Output node allowed (found {{count}})",
+      "danglingEdge": "Edge points at a missing node: {{source}} → {{target}}",
+      "badPort": "Unknown port: {{port}}",
+      "fanInOverflow": "Too many inputs: {{count}} edges, limit is {{limit}}",
+      "fanInMissing": "Needs {{need}} inputs, got {{count}}",
+      "outputNoInput": "Output must have an input",
+      "multiInPort": "Multi-input ports must be in1…inN, got {{ports}}",
+      "cycle": "The graph contains a cycle, so execution order is undefined",
+      "outputUnreachable": "Output is unreachable from Input",
+      "unreachable": "This node is not on any Input → Output path",
+      "dryRunFailed": "Dry run failed",
+      "presetUnreadable": "Preset cannot be read: {{detail}}"
+    },
+    "node": {
+      "notTensor": "Expected a tensor, got {{got}}",
+      "expectFloat": "Expected a float tensor (got {{got}})",
+      "expectNdim": "Expected a {{expected}}D input (got {{got}}D, shape {{shape}})",
+      "expectInt": "Expected integer token ids (got {{got}})",
+      "headsMismatch": "Feature dim {{dim}} is not divisible by {{heads}} heads",
+      "addShape": "Addition needs identical shapes: {{shapes}}",
+      "catShape": "Concat needs matching shapes except dim={{dim}}: {{shapes}}",
+      "addNeedsTwo": "Add needs at least two inputs (got {{count}})",
+      "catNeedsTwo": "Concat needs at least two inputs (got {{count}})",
+      "outputDim": "Output last dim must be {{expected}} ({{kind}}), got {{got}}",
+      "seqTooLong": "Sequence length {{length}} exceeds max_len={{max_len}}",
+      "embeddingRange": "Max token id {{max_index}} is out of vocab size {{num_embeddings}}",
+      "groupsDivisible": "{{param}}={{value}} is not divisible by groups={{groups}}",
+      "forward": "Forward pass failed ({{type}})"
+    },
+    "param": {
+      "type": "Param {{param}} has the wrong type: expected {{expected}}",
+      "range": "Param {{param}} is out of range [{{min}}, {{max}}]",
+      "choice": "Param {{param}} has an invalid value: pick one of {{choices}}"
+    },
+    "model": {
+      "notFound": "Model not found: {{id}}"
+    }
   },
   "common": {
     "loading": "Loading…"

@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 
 import "allotment/dist/style.css";
+import "@xyflow/react/dist/style.css";
 import "./i18n";
 import "./styles/global.css";
 

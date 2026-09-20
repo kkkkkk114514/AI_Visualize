@@ -15,16 +15,30 @@
       "dl": "深度学习",
       "rl": "强化学习"
     },
+    "source": {
+      "preset": "预置",
+      "user": "我的"
+    },
     "empty": "暂无预置模型",
     "loadError": "模型库加载失败",
     "retry": "重试"
   },
   "lab": {
     "title": "工作台",
+    "untitled": "未命名模型",
+    "readOnly": "只读预置",
+    "unsaved": "有未保存修改",
+    "cloneAsCopy": "克隆为副本",
+    "newGraph": "空白模型：从左侧面板添加节点，连线后即开始试跑。",
+    "presetGraph": "预置模型为只读；克隆为副本后可自由编辑并训练。",
+    "loadError": "工作台加载失败",
     "zones": {
       "config": "配置",
       "main": "主视图",
-      "metrics": "指标与探针"
+      "metrics": "指标与探针",
+      "nodes": "节点",
+      "graph": "图编辑器",
+      "check": "检查与提示"
     },
     "empty": {
       "config": "暂无可配置项",
@@ -58,6 +72,136 @@
     "connected": "已连接",
     "connecting": "连接中",
     "disconnected": "未连接"
+  },
+  "nodes": {
+    "category": {
+      "io": "输入输出",
+      "basic": "基础层",
+      "conv": "卷积与池化",
+      "norm": "归一化",
+      "seq": "序列",
+      "combine": "组合"
+    }
+  },
+  "param": {
+    "shape": "形状",
+    "outDim": "输出维度（0=用类别数）",
+    "classes": "类别数",
+    "outFeatures": "输出特征数",
+    "bias": "偏置",
+    "startDim": "起始维度",
+    "dropoutP": "随机失活概率",
+    "activation": "激活函数",
+    "outChannels": "输出通道",
+    "kernelSize": "卷积核",
+    "stride": "步幅",
+    "padding": "填充",
+    "dilation": "空洞",
+    "outputSize": "输出尺寸",
+    "eps": "eps",
+    "momentum": "动量",
+    "normalizedShape": "归一化维度（空=最后一维）",
+    "numEmbeddings": "词表大小",
+    "embeddingDim": "嵌入维度",
+    "maxLen": "最大长度",
+    "posMode": "位置编码",
+    "hiddenSize": "隐藏维度",
+    "numLayers": "层数",
+    "bidirectional": "双向",
+    "returnSequences": "返回序列",
+    "numHeads": "注意力头数",
+    "causal": "因果掩码",
+    "dim": "拼接维度"
+  },
+  "activation": {
+    "relu": "ReLU",
+    "leaky_relu": "LeakyReLU",
+    "gelu": "GELU",
+    "tanh": "Tanh",
+    "sigmoid": "Sigmoid"
+  },
+  "posMode": {
+    "learned": "可学习",
+    "sinusoidal": "正弦"
+  },
+  "editor": {
+    "autoLayout": "自动布局",
+    "undo": "撤销",
+    "redo": "重做",
+    "shortcuts": "快捷键：Ctrl+Z 撤销 · Ctrl+Y 重做 · Ctrl+C/V 复制粘贴 · Delete 删除",
+    "readOnlyPaletteHint": "预置模型为只读，先克隆为副本再编辑",
+    "datasetBound": "形状由数据集决定，不可修改",
+    "zeroMeansKernel": "留空时按卷积核大小处理",
+    "multiInput": "多输入",
+    "shapeIn": "输入形状（B = 批大小）",
+    "shapeOut": "输出形状",
+    "paramsCount": "可训练参数量",
+    "issueErrors": "{{count}} 个错误",
+    "issueErrors_other": "{{count}} 个错误",
+    "issueWarnings": "{{count}} 个警告",
+    "issueWarnings_other": "{{count}} 个警告",
+    "noErrors": "无错误",
+    "noIssues": "暂无问题",
+    "checking": "检查中…",
+    "checkMs": "耗时 {{ms}} ms",
+    "notChecked": "未检查",
+    "networkError": "无法连接后端：{{detail}}",
+    "totalParams": "总参数量",
+    "edge": "连线"
+  },
+  "errors": {
+    "kind": {
+      "classification": "分类",
+      "regression": "回归"
+    },
+    "graph": {
+      "empty": "图是空的：至少需要一个 Input 和一个 Output",
+      "notObject": "IR 必须是 JSON 对象（收到 {{detail}}）",
+      "badNode": "节点格式错误：{{detail}}",
+      "badEdge": "连线格式错误：{{detail}}",
+      "duplicateNode": "存在重复的节点 id",
+      "duplicateEdge": "存在重复的连线 id",
+      "unknownType": "未知节点类型：{{type}}",
+      "missingInput": "缺少 Input 节点",
+      "multipleInput": "只能有一个 Input 节点（当前 {{count}} 个）",
+      "missingOutput": "缺少 Output 节点",
+      "multipleOutput": "只能有一个 Output 节点（当前 {{count}} 个）",
+      "danglingEdge": "连线指向不存在的节点：{{source}} → {{target}}",
+      "badPort": "端口不存在：{{port}}",
+      "fanInOverflow": "输入过多：{{count}} 条连线，最多 {{limit}} 条",
+      "fanInMissing": "需要 {{need}} 个输入，当前 {{count}} 个",
+      "outputNoInput": "Output 必须有输入",
+      "multiInPort": "多输入端口应为 in1…inN，当前为 {{ports}}",
+      "cycle": "图中存在环，无法确定执行顺序",
+      "outputUnreachable": "Output 无法从 Input 到达",
+      "unreachable": "该节点不在 Input → Output 的路径上",
+      "dryRunFailed": "试跑失败",
+      "presetUnreadable": "预置模型无法读取：{{detail}}"
+    },
+    "node": {
+      "notTensor": "期望张量，实际收到 {{got}}",
+      "expectFloat": "需要浮点张量（收到 {{got}}）",
+      "expectNdim": "需要 {{expected}} 维输入（收到 {{got}} 维，形状 {{shape}}）",
+      "expectInt": "需要整数 token id（收到 {{got}}）",
+      "headsMismatch": "特征维度 {{dim}} 不能被注意力头数 {{heads}} 整除",
+      "addShape": "相加要求形状一致：{{shapes}}",
+      "catShape": "拼接要求除 dim={{dim}} 外形状一致：{{shapes}}",
+      "addNeedsTwo": "相加至少需要两个输入（当前 {{count}} 个）",
+      "catNeedsTwo": "拼接至少需要两个输入（当前 {{count}} 个）",
+      "outputDim": "输出最后一维应为 {{expected}}（{{kind}}），实际 {{got}}",
+      "seqTooLong": "序列长度 {{length}} 超过 max_len={{max_len}}",
+      "embeddingRange": "token id 最大值 {{max_index}} 超出词表大小 {{num_embeddings}}",
+      "groupsDivisible": "{{param}}={{value}} 不能被 groups={{groups}} 整除",
+      "forward": "前向计算失败（{{type}}）"
+    },
+    "param": {
+      "type": "参数 {{param}} 类型错误：需要 {{expected}}",
+      "range": "参数 {{param}} 超出范围 [{{min}}, {{max}}]",
+      "choice": "参数 {{param}} 取值无效：可选 {{choices}}"
+    },
+    "model": {
+      "notFound": "模型不存在：{{id}}"
+    }
   },
   "common": {
     "loading": "加载中…"

@@ -8,11 +8,12 @@ import { AppHeader } from "../components/AppHeader";
 import { ConnectionStatus } from "../components/ConnectionStatus";
 import { DeviceBadge } from "../components/DeviceBadge";
 import { LanguageSwitch } from "../components/LanguageSwitch";
+import { localizedText } from "../i18n/localized";
 
 const SECTION_ORDER: ModelKind[] = ["ml", "dl", "rl"];
 
 export default function LibraryPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [groups, setGroups] = useState<ModelsResponse["groups"] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -71,14 +72,29 @@ export default function LibraryPage() {
 
         <div className="sections">
           {SECTION_ORDER.map((kind) => {
-            const count = groups?.[kind]?.length ?? 0;
+            const models = groups?.[kind] ?? [];
             return (
               <section key={kind} className="section">
                 <div className="section__header">
                   <h2>{t(`library.sections.${kind}`)}</h2>
-                  {count > 0 ? <span className="section__count">{count}</span> : null}
+                  {models.length > 0 ? <span className="section__count">{models.length}</span> : null}
                 </div>
-                {count === 0 ? <p className="section__empty">{t("library.empty")}</p> : null}
+                {models.length === 0 ? (
+                  <p className="section__empty">{t("library.empty")}</p>
+                ) : (
+                  <div className="model-grid">
+                    {models.map((model) => (
+                      <Link key={model.id} className="model-card" to={`/lab/${encodeURIComponent(model.id)}`}>
+                        <div className="model-card__name">{localizedText(model.name, i18n.language) || model.id}</div>
+                        <div className="model-card__desc">{localizedText(model.desc, i18n.language)}</div>
+                        <div className="model-card__meta">
+                          <span className={`chip chip--${model.kind}`}>{model.kind.toUpperCase()}</span>
+                          <span className="chip chip--muted">{t(`library.source.${model.source}`)}</span>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
               </section>
             );
           })}
