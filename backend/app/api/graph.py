@@ -35,7 +35,10 @@ async def infer_graph(payload: dict[str, Any]) -> Any:
         graph = parse_graph(payload)
     except IRParseError as exc:
         return _parse_error_response(exc)
-    result = await run_in_threadpool(shapes.analyze, graph)
+    dataset_id = payload.get("dataset_id")
+    result = await run_in_threadpool(
+        shapes.analyze, graph, shapes.DRY_RUN_BATCH, dataset_id if isinstance(dataset_id, str) else None
+    )
     return {
         "ok": result["ok"],
         "nodes": result["nodes"],
@@ -53,7 +56,10 @@ async def validate_graph_ir(payload: dict[str, Any]) -> Any:
         graph = parse_graph(payload)
     except IRParseError as exc:
         return _parse_error_response(exc)
-    result = await run_in_threadpool(shapes.analyze, graph)
+    dataset_id = payload.get("dataset_id")
+    result = await run_in_threadpool(
+        shapes.analyze, graph, shapes.DRY_RUN_BATCH, dataset_id if isinstance(dataset_id, str) else None
+    )
     return {
         "ok": result["ok"],
         "errors": result["errors"],

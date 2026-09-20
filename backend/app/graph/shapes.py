@@ -11,7 +11,7 @@ from typing import Any
 
 import torch
 
-from app.graph.ir import GraphIR, Issue, validate_graph
+from app.graph.ir import GraphIR, Issue, bind_dataset, validate_graph
 from app.graph.module import GraphModule, NodeExecutionError, build_graph_module
 
 DRY_RUN_BATCH = 2
@@ -41,7 +41,7 @@ def _shape_list(value: Any) -> list[int] | None:
     return None
 
 
-def _run(graph: GraphIR, batch: int) -> dict[str, Any]:
+def _run(graph: GraphIR, batch: int, dataset_id: str | None = None) -> dict[str, Any]:
     started = time.perf_counter()
     issues, params_by_node = validate_graph(graph)
     errors = [i.to_dict() for i in issues if i.severity == "error"]
@@ -56,6 +56,10 @@ def _run(graph: GraphIR, batch: int) -> dict[str, Any]:
     if errors:
         result["elapsed_ms"] = round((time.perf_counter() - started) * 1000, 2)
         return result
+
+    meta = dataset_meta(dataset_id)
+    if meta is not None:
+        bind_dataset(graph, params_by_node, meta)
 
     input_node = next(n for n in graph.nodes if n.type == "Input")
     dummy = make_dummy_input(graph, params_by_node[input_node.id], batch)
@@ -123,16 +127,30 @@ def _run(graph: GraphIR, batch: int) -> dict[str, Any]:
     return result
 
 
-def analyze(graph: GraphIR, batch: int = DRY_RUN_BATCH) -> dict[str, Any]:
-    """结构校验 + dry-run；结果按（忽略 ui 的规范 IR, batch）缓存。"""
-    key = hashlib.sha256(f"{graph.canonical()}|batch={batch}".encode("utf-8")).hexdigest()
+def dataset_meta(dataset_id: str | None) -> dict[str, Any] | None:
+    """已缓存数据集的元数据；未指定或未缓存时返回 None（退回 IR 里的 dataset_bound 参数）。"""
+    if not dataset_id:
+        return None
+    from app.datasets import registry
+
+    spec = registry.get_spec(dataset_id)
+    if spec is None or not registry.is_cached(spec):
+        return None
+    return registry.meta(spec)
+
+
+def analyze(graph: GraphIR, batch: int = DRY_RUN_BATCH, dataset_id: str | None = None) -> dict[str, Any]:
+    """结构校验 + dry-run；结果按（忽略 ui 的规范 IR, batch, dataset）缓存。"""
+    key = hashlib.sha256(
+        f"{graph.canonical()}|batch={batch}|dataset={dataset_id or '-'}".encode("utf-8")
+    ).hexdigest()
     with _cache_lock:
         cached = _cache.get(key)
         if cached is not None:
             _cache.move_to_end(key)
             return copy.deepcopy(cached)
 
-    result = _run(graph, batch)
+    result = _run(graph, batch, dataset_id)
 
     with _cache_lock:
         _cache[key] = copy.deepcopy(result)

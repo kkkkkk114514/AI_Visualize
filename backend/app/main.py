@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -8,7 +9,10 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import config
-from app.api import graph, health, models, ws
+from app.api import datasets, graph, health, models, runs, ws
+from app.api.ws import hub
+from app.runners.manager import manager
+from app.store import db
 
 logging.basicConfig(
     level=logging.INFO,
@@ -20,14 +24,27 @@ log = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     config.ensure_data_dirs()
+    db.init_db()
+    loop = asyncio.get_running_loop()
+    hub.bind_loop(loop)
+    manager.bind_loop(loop)
+    orphans = db.mark_orphans_interrupted()
+    if orphans:
+        log.warning("上次残留的活动 run 已标记为 interrupted：%s", ", ".join(orphans))
     log.info("数据目录就绪：%s", config.DATA_DIR)
-    yield
+    try:
+        yield
+    finally:
+        await manager.shutdown()
+        db.close()
 
 
 app = FastAPI(title=config.SERVICE_NAME, version=config.SERVICE_VERSION, lifespan=lifespan)
 app.include_router(health.router)
 app.include_router(models.router)
 app.include_router(graph.router)
+app.include_router(datasets.router)
+app.include_router(runs.router)
 app.include_router(ws.router)
 
 if config.FRONTEND_DIST.is_dir():

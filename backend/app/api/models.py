@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api", tags=["models"])
 KINDS = ("ml", "dl", "rl")
 
 
-def _read_preset(model_id: str) -> dict | None:
+def read_preset(model_id: str) -> dict | None:
     if "/" in model_id or "\\" in model_id or model_id.startswith("."):
         return None
     path = config.PRESETS_DIR / f"{model_id}.json"
@@ -31,7 +31,7 @@ def _read_preset(model_id: str) -> dict | None:
 def list_models() -> dict:
     groups: dict[str, list[dict]] = {kind: [] for kind in KINDS}
     for path in sorted(config.PRESETS_DIR.glob("*.json")):
-        preset = _read_preset(path.stem)
+        preset = read_preset(path.stem)
         if preset is None:
             continue
         kind = preset.get("kind", "dl")
@@ -50,7 +50,7 @@ def list_models() -> dict:
 
 @router.get("/models/{model_id}")
 def get_model(model_id: str):
-    preset = _read_preset(model_id)
+    preset = read_preset(model_id)
     if preset is None:
         return JSONResponse(
             status_code=404,

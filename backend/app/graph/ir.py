@@ -577,6 +577,24 @@ def _reachable(graph: GraphIR, order: list[str], start: str) -> set[str]:
     return seen
 
 
+def bind_dataset(graph: GraphIR, params_by_node: dict[str, dict[str, Any]], meta: dict[str, Any]) -> None:
+    """把数据集元数据写回 dataset_bound 参数（docs/02 §4.1）：Input.shape / Output.classes / Embedding 词表。"""
+    shape = meta.get("input_shape")
+    num_classes = meta.get("num_classes")
+    vocab_size = meta.get("vocab_size")
+    for node in graph.nodes:
+        params = params_by_node.get(node.id)
+        if params is None:
+            continue
+        if node.type == "Input" and shape:
+            params["shape"] = [int(value) for value in shape]
+        elif node.type == "Output":
+            if not params.get("out_dim") and num_classes:
+                params["classes"] = int(num_classes)
+        elif node.type == "Embedding" and vocab_size:
+            params["num_embeddings"] = int(vocab_size)
+
+
 def load_preset(model_id: str) -> GraphIR | None:
     path = config.PRESETS_DIR / f"{model_id}.json"
     if not path.is_file():
