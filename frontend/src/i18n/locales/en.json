@@ -127,7 +127,8 @@
       "empty": "No runs yet",
       "live": "live",
       "delete": "Delete",
-      "count": "{{total}} total · showing latest {{count}}"
+      "count": "{{total}} total · showing latest {{count}}",
+      "finishedAt": "ended"
     },
     "presetHint": "Presets are read-only: train directly, or clone a copy to edit."
   },

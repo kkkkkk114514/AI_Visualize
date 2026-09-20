@@ -80,7 +80,9 @@ export function RunList() {
                   {t("run.metrics.step")} {run.total_steps}
                 </span>
                 <span>{formatDuration(run)}</span>
-                <span>{formatTime(run.created_at)}</span>
+                <span>
+                  {t("run.list.finishedAt")} {run.finished_at ? formatTime(run.finished_at) : "—"}
+                </span>
               </div>
               <div className="runs__actions">
                 {isActiveStatus(run.status) ? (

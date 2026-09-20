@@ -127,7 +127,8 @@
       "empty": "还没有训练记录",
       "live": "进行中",
       "delete": "删除",
-      "count": "共 {{total}} 条，显示最近 {{count}} 条"
+      "count": "共 {{total}} 条，显示最近 {{count}} 条",
+      "finishedAt": "结束"
     },
     "presetHint": "预置模型只读：可直接训练；克隆为副本后可自由编辑。"
   },
