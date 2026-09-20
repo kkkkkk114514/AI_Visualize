@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { probeCandidates } from "../../graph/probes";
+import { useGraphStore } from "../../stores/graphStore";
 import type { RunConfig } from "../../stores/runStore";
 import { isActiveStatus, useRunStore } from "../../stores/runStore";
 
@@ -74,11 +76,18 @@ export function TrainingConfig() {
   const setConfig = useRunStore((state) => state.setConfig);
   const applyLr = useRunStore((state) => state.applyLr);
   const applyBatchSize = useRunStore((state) => state.applyBatchSize);
+  const probeChoices = useRunStore((state) => state.probeChoices);
+  const probeEveryN = useRunStore((state) => state.probeEveryN);
+  const toggleProbe = useRunStore((state) => state.toggleProbe);
+  const setProbeKind = useRunStore((state) => state.setProbeKind);
+  const setProbeEveryN = useRunStore((state) => state.setProbeEveryN);
+  const nodes = useGraphStore((state) => state.nodes);
 
   const running = isActiveStatus(status);
   const dataset = datasets?.find((item) => item.id === datasetId) ?? null;
   const progress = datasetId ? datasetProgress[datasetId] : undefined;
   const downloading = progress !== undefined && progress.phase !== "done" && progress.phase !== "error";
+  const candidates = useMemo(() => probeCandidates(nodes), [nodes]);
 
   const frozen = (key: keyof RunConfig) =>
     running && key !== "lr" && key !== "batch_size";
@@ -111,8 +120,11 @@ export function TrainingConfig() {
               {dataset.cached ? t("run.dataset.cached") : t("run.dataset.notCached")}
             </span>
             <span className="config__meta">
-              {dataset.input_shape.join("×")} · {dataset.num_classes} ·{" "}
-              {dataset.cached ? formatBytes(dataset.size_bytes) : formatBytes(dataset.total_bytes)}
+              {dataset.input_shape.join("×")} ·{" "}
+              {dataset.loader === "text_char"
+                ? t("run.dataset.vocab", { n: dataset.vocab_size ?? dataset.num_classes })
+                : dataset.num_classes}{" "}
+              · {dataset.cached ? formatBytes(dataset.size_bytes) : formatBytes(dataset.total_bytes)}
             </span>
           </div>
         ) : null}
@@ -232,6 +244,61 @@ export function TrainingConfig() {
         {running ? (
           <div className="config__hint">{t("run.hyper.lockedHint", { run: runId ?? "" })}</div>
         ) : null}
+      </div>
+
+      <div className="config__section">
+        <div className="config__title">{t("run.probe.title")}</div>
+        <div className="probe-pick">
+          {candidates.map((candidate) => {
+            const choice = probeChoices.find((item) => item.nodeId === candidate.nodeId);
+            return (
+              <div key={candidate.nodeId} className="probe-pick__row">
+                <label className="probe-pick__check" title={candidate.nodeType}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(choice)}
+                    disabled={running}
+                    onChange={() => toggleProbe(candidate.nodeId, candidate.kinds[0])}
+                  />
+                  <span className="probe-pick__name">{candidate.nodeId}</span>
+                  <span className="probe-pick__type">{candidate.nodeType}</span>
+                </label>
+                {choice ? (
+                  <select
+                    className="probe-pick__kind"
+                    value={choice.kind}
+                    disabled={running}
+                    onChange={(event) =>
+                      setProbeKind(candidate.nodeId, event.target.value as typeof choice.kind)
+                    }
+                  >
+                    {candidate.kinds.map((kind) => (
+                      <option key={kind} value={kind}>
+                        {t(`run.probe.kind.${kind}`)}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+        <div className="config__row">
+          <NumberField
+            label={t("run.probe.everyN")}
+            value={probeEveryN}
+            step={10}
+            min={1}
+            max={100000}
+            disabled={running}
+            hint={t("run.probe.everyNHint")}
+            onCommit={setProbeEveryN}
+          />
+          <span className="config__meta">{t("run.probe.picked", { n: probeChoices.length })}</span>
+        </div>
+        <div className="config__hint">
+          {running ? t("run.probe.lockedHint") : t("run.probe.hint")}
+        </div>
       </div>
     </div>
   );

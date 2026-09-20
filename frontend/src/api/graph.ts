@@ -27,8 +27,9 @@ export interface InferResponse {
   elapsed_ms: number;
 }
 
-export function inferGraph(ir: GraphIR): Promise<InferResponse> {
-  return apiPost<InferResponse>("/api/graph/infer", ir);
+/** 带上当前选中的数据集：后端会按数据集绑定 Input.shape / 词表 / 分类头后再 dry-run。 */
+export function inferGraph(ir: GraphIR, datasetId?: string | null): Promise<InferResponse> {
+  return apiPost<InferResponse>("/api/graph/infer", { ...ir, dataset_id: datasetId ?? undefined });
 }
 
 export function fetchModelDetail(modelId: string): Promise<{ source: string; graph: GraphIR }> {

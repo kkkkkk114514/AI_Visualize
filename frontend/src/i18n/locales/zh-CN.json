@@ -40,7 +40,8 @@
       "graph": "图编辑器",
       "check": "检查与提示",
       "nodeHelp": "节点说明",
-      "runs": "历史 run"
+      "runs": "历史 run",
+      "probe": "探针"
     },
     "empty": {
       "config": "暂无可配置项",
@@ -87,7 +88,8 @@
         "verify": "校验中",
         "done": "完成",
         "error": "失败"
-      }
+      },
+      "vocab": "词表 {{n}}"
     },
     "hyper": {
       "title": "超参数",
@@ -112,6 +114,47 @@
       "lrLive": "训练中可改：下一个 step 生效",
       "batchLive": "训练中可改：下一个 epoch 生效",
       "lockedHint": "训练进行中：仅学习率与批大小可改（{{run}}）"
+    },
+    "probe": {
+      "title": "探针层",
+      "everyN": "采样间隔",
+      "everyNHint": "每 N 个 step 采样一次，所有探针流共用",
+      "picked": "已选 {{n}} 层",
+      "hint": "勾选随下一次启动提交；全不勾 = 不挂探针，可作吞吐对照基线。",
+      "lockedHint": "训练中不可改探针：改动会在下一个 run 生效。",
+      "kind": {
+        "feature_grid": "特征图",
+        "attention": "注意力",
+        "hidden": "隐藏态",
+        "histogram": "直方图",
+        "weights": "权重"
+      },
+      "caption": {
+        "channel": "通道 {{n}}",
+        "head": "头 {{n}}"
+      },
+      "readout": {
+        "pixel": "通道 {{channel}} · ({{row}}, {{col}}) · {{value}}",
+        "hidden": "时间步 {{row}} · 单元 {{col}} · {{value}}",
+        "masked": "因果掩码",
+        "bin": "bin {{bin}} · 计数 {{count}} · [{{low}}, {{high}})"
+      },
+      "streamHint": "切换 (节点, 类型) 探针流",
+      "stepHint": "跟随最新采样步，或回看指定步",
+      "followLatest": "跟随最新",
+      "colormapHint": "切换配色",
+      "colormap": {
+        "viridis": "Viridis",
+        "magma": "Magma",
+        "gray": "灰度",
+        "coolwarm": "冷暖"
+      },
+      "noStream": "暂无探针流",
+      "empty": {
+        "noRun": "开始训练或点选右侧历史 run 后，这里显示探针快照",
+        "waiting": "等待采样步：每 {{n}} 个 step 采样一次",
+        "noProbes": "该 run 未挂探针：在上方「探针层」勾选后重新启动"
+      }
     },
     "chart": {
       "source": "曲线来源：{{name}}",
@@ -320,6 +363,16 @@
       "stale": "{{seconds}}s 没有收到训练事件，进程可能卡住（未自动终止）",
       "failed": "训练进程异常退出",
       "spawnFailed": "训练进程启动失败"
+    },
+    "probe": {
+      "badConfig": "探针配置格式错误（{{detail}}）",
+      "unknownNode": "探针目标节点不存在：{{node_id}}",
+      "badKind": "探针类型非法：{{kind}}（节点 {{node_id}}）",
+      "badValue": "探针参数非法：{{param}}",
+      "kindMismatch": "张量形状与探针类型 {{kind}} 不匹配：{{shape}}"
+    },
+    "snapshot": {
+      "notFound": "快照不存在：{{id}}"
     }
   },
   "log": {
@@ -331,7 +384,13 @@
       "bestSaved": "第 {{epoch}} 轮刷新最优（{{value}}），已保存权重",
       "finished": "训练完成：{{epochs}} 轮，用时 {{elapsed_s}}s",
       "lrApplied": "学习率将在下一个 step 生效：{{lr}}",
-      "batchApplied": "批大小将在下一个 epoch 生效：{{batch_size}}"
+      "batchApplied": "批大小将在下一个 epoch 生效：{{batch_size}}",
+      "textCorpus": "字符级语料：词表 {{vocab_size}} · 序列长度 {{seq_len}}"
+    },
+    "probe": {
+      "attached": "已挂 {{n}} 条探针流",
+      "capped": "{{node_id}} 的 {{kind}} 快照已达上限 {{limit}} 条，该流停止采样",
+      "disabled": "{{node_id}} 的 {{kind}} 探针已停用（形状不匹配）"
     }
   },
   "common": {

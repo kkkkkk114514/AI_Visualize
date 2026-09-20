@@ -68,6 +68,46 @@ export interface RunHyperparams {
   val_size?: number;
 }
 
+export type ProbeKind = "feature_grid" | "attention" | "hidden" | "histogram" | "weights";
+
+/** 探针条目（docs/02 §6.1）：随 run 启动提交，训练中不变。 */
+export interface ProbeSpec {
+  node_id: string;
+  kind: ProbeKind;
+  every_n_steps?: number;
+  sample_index?: number;
+  max_items?: number;
+}
+
+/** WS `probe.snapshot` / 快照索引行：只有元数据，payload 另取。 */
+export interface SnapshotMeta {
+  id: string;
+  run_id: string;
+  step: number;
+  epoch: number | null;
+  node_id: string | null;
+  kind: ProbeKind;
+  shape: number[];
+  min?: number | null;
+  max?: number | null;
+  created_at?: string | null;
+}
+
+/** 快照 payload 容器（docs/02 §6.2）：uint8 需按 min/max 反量化，uint32 为原始计数。 */
+export interface SnapshotPayload {
+  shape: number[];
+  dtype: string;
+  layout: string;
+  min: number;
+  max: number;
+  data_b64: string;
+  meta?: { heads?: number; tokens?: number; causal?: boolean; bins?: number };
+}
+
+export interface SnapshotsResponse {
+  snapshots: SnapshotMeta[];
+}
+
 export interface RunSummary {
   id: string;
   name: string;
@@ -75,6 +115,7 @@ export interface RunSummary {
   model_id: string | null;
   dataset_id: string | null;
   hyperparams: RunHyperparams;
+  probes?: ProbeSpec[];
   status: RunStatus;
   device: string | null;
   seed: number | null;
@@ -119,15 +160,17 @@ export interface DatasetFileState {
   present: boolean;
   md5_ok: boolean;
   bytes: number;
-  source?: "raw" | "manual";
+  source?: "raw" | "manual" | "corpora" | string;
 }
 
 export interface DatasetInfo {
   id: string;
   name: LocalizedText;
   task: string;
+  loader: string;
   input_shape: number[];
   num_classes: number;
+  vocab_size: number | null;
   cached: boolean;
   size_bytes: number;
   total_bytes: number;

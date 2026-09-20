@@ -3,15 +3,21 @@ import { create } from "zustand";
 import { downloadDataset, listDatasets } from "../api/datasets";
 import { ApiError } from "../api/rest";
 import { controlRun, deleteRun, fetchRunMetrics, getRun, listRuns, startRun } from "../api/runs";
+import { clearSnapshotCache, listSnapshots } from "../api/snapshots";
 import type {
   DatasetInfo,
   MetricName,
   MetricSeries,
+  ProbeKind,
+  ProbeSpec,
   RunStatus,
   RunSummary,
   ServerEvent,
+  SnapshotMeta,
 } from "../api/types";
 import { wsClient } from "../api/ws";
+import { derivedKind } from "../graph/probes";
+import type { GraphIR } from "../graph/ir";
 
 export const METRIC_NAMES: MetricName[] = [
   "loss",
@@ -187,6 +193,26 @@ export interface DatasetProgress {
   detail?: string;
 }
 
+/** 探针勾选项：按 `(node_id, kind)` 标识一条流（docs/02 §6.1）。 */
+export interface ProbeChoice {
+  nodeId: string;
+  kind: ProbeKind;
+}
+
+/** 默认采样间隔与每流快照上限（对齐后端 `config.PROBE_*`）。 */
+export const DEFAULT_PROBE_EVERY_N = 50;
+export const PROBE_SNAPSHOT_WINDOW = 200;
+
+export function probeStreamKey(choice: ProbeChoice): string {
+  return `${choice.nodeId}:${choice.kind}`;
+}
+
+export function parseStreamKey(key: string): ProbeChoice | null {
+  const at = key.lastIndexOf(":");
+  if (at <= 0) return null;
+  return { nodeId: key.slice(0, at), kind: key.slice(at + 1) as ProbeKind };
+}
+
 interface RunState {
   datasets: DatasetInfo[] | null;
   datasetsError: string | null;
@@ -210,11 +236,26 @@ interface RunState {
   historyTotal: number;
   historyError: string | null;
 
+  probeChoices: ProbeChoice[];
+  probeEveryN: number;
+  /** streamKey → 该流的快照元数据（按 step 递增，实时追加 / 回放整批填充） */
+  snapshots: Record<string, SnapshotMeta[]>;
+  snapshotRunId: string | null;
+  probeStream: string | null;
+  /** null = 跟随最新采样步；数字为 `snapshots[probeStream]` 的下标（回放步选择器） */
+  probeCursor: number | null;
+
   loadDatasets: () => Promise<void>;
   downloadDataset: (datasetId: string) => Promise<void>;
   setDataset: (datasetId: string) => void;
   setConfig: (patch: Partial<RunConfig>) => void;
   applyConfigDefaults: (defaults: Record<string, unknown> | null | undefined) => void;
+  applyProbeDefaults: (graph: Pick<GraphIR, "nodes" | "probe_defaults"> | null | undefined) => void;
+  toggleProbe: (nodeId: string, defaultKind: ProbeKind) => void;
+  setProbeKind: (nodeId: string, kind: ProbeKind) => void;
+  setProbeEveryN: (everyN: number) => void;
+  setProbeStream: (stream: string | null) => void;
+  setProbeCursor: (cursor: number | null) => void;
   start: (graph: unknown, modelId?: string) => Promise<void>;
   pause: () => Promise<void>;
   resume: () => Promise<void>;
@@ -243,6 +284,11 @@ export function isActiveStatus(status: RunStatus): boolean {
 
 export function isTerminalStatus(status: RunStatus): boolean {
   return TERMINAL.includes(status);
+}
+
+function firstStream(grouped: Record<string, SnapshotMeta[]>): string | null {
+  const keys = Object.keys(grouped);
+  return keys.find((key) => grouped[key].length > 0) ?? keys[0] ?? null;
 }
 
 function errorState(error: unknown, fallbackKey = "errors.run.unknown"): RunErrorState {
@@ -282,6 +328,50 @@ export const useRunStore = create<RunState>((set, get) => {
     });
   };
 
+  /** 把快照索引按流分组，供探针面板直接取用。 */
+  const groupSnapshots = (metas: SnapshotMeta[]) => {
+    const grouped: Record<string, SnapshotMeta[]> = {};
+    for (const meta of metas) {
+      if (!meta.node_id) continue;
+      const key = probeStreamKey({ nodeId: meta.node_id, kind: meta.kind });
+      (grouped[key] ??= []).push(meta);
+    }
+    for (const list of Object.values(grouped)) list.sort((a, b) => a.step - b.step || a.id.localeCompare(b.id));
+    return grouped;
+  };
+
+  /** 挂到某个 run 上：勾选与采样间隔同步为该 run 实际提交的探针配置（训练中不可改，docs/02 §6.1）。 */
+  const adoptRunProbes = (run: RunSummary) => {
+    clearSnapshotCache();
+    const specs = run.probes ?? [];
+    const choices = specs.map((spec) => ({ nodeId: spec.node_id, kind: spec.kind }));
+    set({
+      probeChoices: choices,
+      probeEveryN: specs[0]?.every_n_steps ?? get().probeEveryN,
+      snapshots: {},
+      snapshotRunId: run.id,
+      probeStream: choices.length > 0 ? probeStreamKey(choices[0]) : null,
+      probeCursor: null,
+    });
+  };
+
+  /** 拉快照索引（回放整批 / 实时补齐未订阅期间的采样）。 */
+  const loadSnapshots = async (runId: string) => {
+    try {
+      const payload = await listSnapshots(runId);
+      if (get().snapshotRunId !== runId) return;
+      const grouped = groupSnapshots(payload.snapshots);
+      set((state) => ({
+        snapshots: grouped,
+        // 勾选的首条流即使还没采样到也保持选中；否则退到第一个有数据的流
+        probeStream: state.probeStream ?? firstStream(grouped),
+        probeCursor: null,
+      }));
+    } catch {
+      // 索引拉取失败不影响其余面板：实时事件仍会补上快照
+    }
+  };
+
   return {
     datasets: null,
     datasetsError: null,
@@ -304,6 +394,12 @@ export const useRunStore = create<RunState>((set, get) => {
     history: [],
     historyTotal: 0,
     historyError: null,
+    probeChoices: [],
+    probeEveryN: DEFAULT_PROBE_EVERY_N,
+    snapshots: {},
+    snapshotRunId: null,
+    probeStream: null,
+    probeCursor: null,
 
     loadDatasets: async () => {
       try {
@@ -312,7 +408,9 @@ export const useRunStore = create<RunState>((set, get) => {
         set((state) => ({
           datasets,
           datasetsError: null,
-          datasetId: state.datasetId ?? cached?.id ?? datasets[0]?.id ?? null,
+          datasetId: datasets.some((item) => item.id === state.datasetId)
+            ? state.datasetId
+            : cached?.id ?? datasets[0]?.id ?? null,
         }));
       } catch (error) {
         set({ datasetsError: error instanceof Error ? error.message : String(error) });
@@ -349,6 +447,56 @@ export const useRunStore = create<RunState>((set, get) => {
       set((state) => ({ config: { ...state.config, ...patch } }));
     },
 
+    applyProbeDefaults: (graph) => {
+      const ids = graph?.probe_defaults ?? [];
+      if (!graph || ids.length === 0) return;
+      const kinds = new Map(graph.nodes.map((node) => [node.id, derivedKind(node.type)]));
+      const choices: ProbeChoice[] = [];
+      for (const nodeId of ids) {
+        const kind = kinds.get(nodeId);
+        if (kind) choices.push({ nodeId, kind });
+      }
+      if (choices.length === 0) return;
+      set((state) => ({
+        probeChoices: choices,
+        probeStream: state.snapshotRunId === null ? probeStreamKey(choices[0]) : state.probeStream,
+      }));
+    },
+
+    toggleProbe: (nodeId, defaultKind) =>
+      set((state) => {
+        const existing = state.probeChoices.find((choice) => choice.nodeId === nodeId);
+        if (existing) {
+          const choices = state.probeChoices.filter((choice) => choice.nodeId !== nodeId);
+          const dropped = probeStreamKey(existing);
+          return {
+            probeChoices: choices,
+            probeStream: state.probeStream === dropped ? null : state.probeStream,
+          };
+        }
+        return { probeChoices: [...state.probeChoices, { nodeId, kind: defaultKind }] };
+      }),
+
+    setProbeKind: (nodeId, kind) =>
+      set((state) => {
+        const previous = state.probeChoices.find((choice) => choice.nodeId === nodeId);
+        const choices = state.probeChoices.map((choice) =>
+          choice.nodeId === nodeId ? { nodeId, kind } : choice,
+        );
+        // 改 kind 等于换一条流：旧的视图选中项跟着迁移，避免指向已不存在的流
+        const probeStream =
+          previous && state.probeStream === probeStreamKey(previous)
+            ? probeStreamKey({ nodeId, kind })
+            : state.probeStream;
+        return { probeChoices: choices, probeStream };
+      }),
+
+    setProbeEveryN: (everyN) => set({ probeEveryN: Math.max(1, Math.round(everyN)) }),
+
+    setProbeStream: (stream) => set({ probeStream: stream, probeCursor: null }),
+
+    setProbeCursor: (cursor) => set({ probeCursor: cursor }),
+
     start: async (graph, modelId) => {
       const state = get();
       if (state.starting) return;
@@ -359,16 +507,29 @@ export const useRunStore = create<RunState>((set, get) => {
       }
       set({ starting: true, startError: null, runError: null, logs: [], replay: null });
       try {
+        const probes: ProbeSpec[] = state.probeChoices.map((choice) => ({
+          node_id: choice.nodeId,
+          kind: choice.kind,
+          every_n_steps: state.probeEveryN,
+        }));
         const run = await startRun({
           graph: modelId ? undefined : graph,
           model_id: modelId,
           dataset_id: datasetId,
           hyperparams: state.config,
+          probes,
         });
         metricsBuffer.reset();
+        clearSnapshotCache();
         wsClient.subscribe(run.id);
         applySummary(run);
-        set({ starting: false });
+        set({
+          starting: false,
+          snapshots: {},
+          snapshotRunId: run.id,
+          probeStream: probes.length > 0 ? probeStreamKey(state.probeChoices[0]) : null,
+          probeCursor: null,
+        });
         pushLog({ id: logSeq++, level: "info", key: "log.run.queued", args: {}, at: Date.now() });
         void get().loadHistory();
       } catch (error) {
@@ -456,8 +617,9 @@ export const useRunStore = create<RunState>((set, get) => {
 
     selectRun: async (runId) => {
       if (runId === null) {
-        set({ replay: null });
+        set({ replay: null, snapshots: {}, snapshotRunId: null, probeStream: null, probeCursor: null });
         metricsBuffer.reset();
+        clearSnapshotCache();
         return;
       }
       const known = get().history.find((item) => item.id === runId) ?? null;
@@ -470,6 +632,8 @@ export const useRunStore = create<RunState>((set, get) => {
         const [detail, metrics] = await Promise.all([getRun(runId), fetchRunMetrics(runId)]);
         set({ replay: detail });
         metricsBuffer.loadSeries(metrics.series);
+        adoptRunProbes(detail);
+        await loadSnapshots(runId);
       } catch (error) {
         set({ runError: errorState(error, "errors.run.loadFailed") });
       }
@@ -482,6 +646,8 @@ export const useRunStore = create<RunState>((set, get) => {
           history: state.history.filter((item) => item.id !== runId),
           historyTotal: Math.max(0, state.historyTotal - 1),
           replay: state.replay?.id === runId ? null : state.replay,
+          snapshots: state.snapshotRunId === runId ? {} : state.snapshots,
+          snapshotRunId: state.snapshotRunId === runId ? null : state.snapshotRunId,
         }));
       } catch (error) {
         set({ runError: errorState(error, "errors.run.deleteFailed") });
@@ -494,8 +660,10 @@ export const useRunStore = create<RunState>((set, get) => {
         wsClient.subscribe(runId);
         applySummary(detail);
         set({ replay: null, runError: null, logs: [] });
+        adoptRunProbes(detail);
         const metrics = await fetchRunMetrics(runId);
         metricsBuffer.loadSeries(metrics.series);
+        await loadSnapshots(runId);
       } catch (error) {
         set({ runError: errorState(error, "errors.run.loadFailed") });
       }
@@ -581,6 +749,39 @@ export const useRunStore = create<RunState>((set, get) => {
             epoch: Number(last.epoch ?? state.epoch),
           });
         }
+        return;
+      }
+
+      if (event.type === "probe.snapshot" && runId) {
+        const owner = state.current?.id === runId || state.replay?.id === runId;
+        if (!owner) return;
+        const nodeId = typeof event.node_id === "string" ? event.node_id : null;
+        const kind = event.kind as ProbeKind | undefined;
+        const snapshotId = typeof event.snapshot_id === "string" ? event.snapshot_id : null;
+        if (!nodeId || !kind || !snapshotId) return;
+        const key = probeStreamKey({ nodeId, kind });
+        const meta: SnapshotMeta = {
+          id: snapshotId,
+          run_id: runId,
+          step: Number(event.step ?? 0),
+          epoch: event.epoch === undefined || event.epoch === null ? null : Number(event.epoch),
+          node_id: nodeId,
+          kind,
+          shape: Array.isArray(event.shape) ? (event.shape as number[]) : [],
+        };
+        set((current) => {
+          const list = current.snapshots[key] ?? [];
+          if (list.some((item) => item.id === meta.id)) return current;
+          const next = [...list, meta];
+          return {
+            snapshots: {
+              ...current.snapshots,
+              [key]: next.length > PROBE_SNAPSHOT_WINDOW ? next.slice(-PROBE_SNAPSHOT_WINDOW) : next,
+            },
+            // 首条快照到达时自动选中该流，面板不必等用户手选
+            probeStream: current.probeStream ?? key,
+          };
+        });
         return;
       }
 

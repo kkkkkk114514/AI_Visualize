@@ -16,6 +16,7 @@ import { NodeDescriptions } from "../panels/GraphEditor/NodeDescriptions";
 import { NodePalette } from "../panels/GraphEditor/NodePalette";
 import { useGraphInfer } from "../panels/GraphEditor/useGraphInfer";
 import { MetricsCharts } from "../panels/MetricsCharts/MetricsCharts";
+import { ProbeViewer } from "../panels/ProbeViewer/ProbeViewer";
 import { RunControls } from "../panels/RunControls/RunControls";
 import { RunList } from "../panels/RunList/RunList";
 import { TrainingConfig } from "../panels/TrainingConfig/TrainingConfig";
@@ -34,6 +35,8 @@ export default function LabPage() {
   const meta = useGraphStore((state) => state.meta);
   const refresh = useRunStore((state) => state.refresh);
   const applyConfigDefaults = useRunStore((state) => state.applyConfigDefaults);
+  const applyProbeDefaults = useRunStore((state) => state.applyProbeDefaults);
+  const setDataset = useRunStore((state) => state.setDataset);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -49,6 +52,7 @@ export default function LabPage() {
       const graph = emptyGraph();
       load(graph, { readOnly: false, source: "new" });
       applyConfigDefaults(graph.hyper_defaults);
+      applyProbeDefaults(graph);
       setStatus("ready");
       return () => {
         cancelled = true;
@@ -59,6 +63,9 @@ export default function LabPage() {
         if (cancelled) return;
         load(detail.graph, { readOnly: detail.source === "preset", source: detail.source === "preset" ? "preset" : "user" });
         applyConfigDefaults(detail.graph.hyper_defaults);
+        applyProbeDefaults(detail.graph);
+        const hinted = (detail.graph as { dataset_id?: unknown }).dataset_id;
+        if (typeof hinted === "string" && hinted) setDataset(hinted);
         setStatus("ready");
       })
       .catch((error: unknown) => {
@@ -69,7 +76,7 @@ export default function LabPage() {
     return () => {
       cancelled = true;
     };
-  }, [graphId, load, applyConfigDefaults]);
+  }, [graphId, load, applyConfigDefaults, applyProbeDefaults, setDataset]);
 
   useGraphInfer(status === "ready");
 
@@ -140,14 +147,19 @@ export default function LabPage() {
               </Allotment.Pane>
               <Allotment.Pane minSize={460}>
                 <Allotment vertical>
-                  <Allotment.Pane minSize={220} preferredSize="58%">
+                  <Allotment.Pane minSize={200} preferredSize="46%">
                     <Panel title={t("lab.zones.graph")}>
                       <GraphEditor />
                     </Panel>
                   </Allotment.Pane>
-                  <Allotment.Pane minSize={180}>
+                  <Allotment.Pane minSize={150} preferredSize="26%">
                     <Panel title={t("lab.zones.metrics")}>
                       <MetricsCharts />
+                    </Panel>
+                  </Allotment.Pane>
+                  <Allotment.Pane minSize={150}>
+                    <Panel title={t("lab.zones.probe")}>
+                      <ProbeViewer />
                     </Panel>
                   </Allotment.Pane>
                 </Allotment>

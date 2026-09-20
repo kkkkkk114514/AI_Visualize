@@ -1455,3 +1455,179 @@ body {
   font-size: 11px;
   color: var(--faint);
 }
+
+/* M3：探针层勾选（训练配置面板内） */
+.probe-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.probe-pick__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.probe-pick__check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.probe-pick__check input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.probe-pick__check input:disabled {
+  cursor: not-allowed;
+}
+
+.probe-pick__name {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.probe-pick__type {
+  font-size: 10.5px;
+  color: var(--faint);
+  flex: none;
+}
+
+.probe-pick__kind {
+  flex: none;
+  max-width: 96px;
+  padding: 2px 4px;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.probe-pick__kind:disabled {
+  color: var(--faint);
+  cursor: not-allowed;
+}
+
+/* M3：探针面板 */
+.probe {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  min-height: 0;
+}
+
+.probe__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  flex-wrap: wrap;
+}
+
+.probe__select {
+  max-width: 190px;
+  padding: 3px 6px;
+  font-family: inherit;
+  font-size: 11.5px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.probe__select--step {
+  max-width: 132px;
+}
+
+.probe__select--map {
+  max-width: 108px;
+}
+
+.probe__select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.probe__spacer {
+  flex: 1;
+}
+
+.probe__meta {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.probe__body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.probe__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 0 16px;
+  font-size: 12px;
+  color: var(--faint);
+  text-align: center;
+}
+
+.probe-render {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.probe-render__canvas {
+  display: block;
+  cursor: crosshair;
+}
+
+.probe-render__marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  outline: 1px solid var(--text);
+  box-shadow: 0 0 0 1px rgba(11, 14, 19, 0.9);
+  pointer-events: none;
+}
+
+.probe-render__readout {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  padding: 2px 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  background: rgba(11, 14, 19, 0.82);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+}

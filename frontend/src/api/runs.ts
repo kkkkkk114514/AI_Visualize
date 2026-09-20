@@ -1,6 +1,7 @@
 import { apiDelete, apiGet, apiPost } from "./rest";
 import type {
   MetricName,
+  ProbeSpec,
   RunControlAction,
   RunDetail,
   RunHyperparams,
@@ -14,6 +15,7 @@ export interface StartRunBody {
   model_id?: string;
   dataset_id: string;
   hyperparams?: RunHyperparams;
+  probes?: ProbeSpec[];
   seed?: number;
   name?: string;
 }
