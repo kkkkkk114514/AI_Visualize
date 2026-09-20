@@ -70,6 +70,15 @@ function liveLegendPlugin(): uPlot.Plugin {
   };
 }
 
+/** 图例项点击即隐藏 / 显示对应曲线（uPlot 原生行为）；补上指针与提示，否则入口完全不可见。 */
+function markLegendToggles(plot: uPlot, hint: string): void {
+  plot.root.querySelectorAll<HTMLElement>(".u-legend .u-series").forEach((row, index) => {
+    if (index === 0) return; // 第 0 行是 x 轴（步）读数，没有曲线可切换
+    row.classList.add("u-toggle");
+    row.querySelector<HTMLElement>("th")?.setAttribute("title", hint);
+  });
+}
+
 /** 每个 epoch 末的 val_* 点位置画竖线，标出 epoch 边界。 */
 function epochMarkersPlugin(valColumn: number): uPlot.Plugin {
   return {
@@ -176,6 +185,7 @@ function buildExtraOptions(name: MetricName, container: HTMLElement, stepLabel: 
 export function MetricsCharts() {
   const { t } = useTranslation();
   const stepLabel = t("run.metrics.step");
+  const legendHint = t("run.chart.legendToggle");
   const chartRunId = useRunStore((state) => state.current?.id ?? state.replay?.id ?? null);
   const selectedName = useRunStore((state) => {
     const run = state.current ?? state.replay;
@@ -193,6 +203,7 @@ export function MetricsCharts() {
     const host = mainHost.current;
     if (!host) return;
     const plot = new uPlot(buildMainOptions(host, stepLabel), metricsBuffer.alignedData(MAIN_SERIES), host);
+    markLegendToggles(plot, legendHint);
     mainPlot.current = plot;
     const off = metricsBuffer.subscribe(() => {
       plot.setData(metricsBuffer.alignedData(MAIN_SERIES));
@@ -209,7 +220,7 @@ export function MetricsCharts() {
       plot.destroy();
       mainPlot.current = null;
     };
-  }, [stepLabel]);
+  }, [legendHint, stepLabel]);
 
   useEffect(() => {
     const created: uPlot[] = [];

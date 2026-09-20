@@ -1333,6 +1333,25 @@ body {
   min-height: 168px;
 }
 
+/* 主图图例项：点击隐藏 / 显示该曲线（uPlot 原生行为），隐藏的曲线只留一个暗色标签便于点回 */
+.charts__main .u-legend .u-series.u-toggle > th {
+  cursor: pointer;
+  user-select: none;
+}
+
+/* uPlot 给所有图例行都加了手型；x 轴（步）那行点不动，光标改回默认 */
+.charts__main .u-legend .u-series:not(.u-toggle) > th {
+  cursor: default;
+}
+
+.charts__main .u-legend .u-series.u-toggle > th:hover .u-label {
+  text-decoration: underline;
+}
+
+.charts__main .u-legend .u-series.u-off > td {
+  display: none;
+}
+
 .charts__extra {
   flex: none;
   height: 96px;

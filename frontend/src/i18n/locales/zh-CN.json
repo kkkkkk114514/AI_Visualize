@@ -117,6 +117,7 @@
       "source": "曲线来源：{{name}}",
       "noSource": "尚未选择 run：开始训练或点选右侧历史 run",
       "empty": "等待指标…",
+      "legendToggle": "点击隐藏 / 显示该曲线（⌘/Ctrl + 点击只看它）",
       "metric": {
         "lr": "学习率",
         "grad_norm": "梯度范数",

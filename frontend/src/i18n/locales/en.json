@@ -117,6 +117,7 @@
       "source": "Curves for {{name}}",
       "noSource": "No run selected: start training or pick a run in the history",
       "empty": "Waiting for metrics…",
+      "legendToggle": "Click to hide or show this curve (⌘/Ctrl + click to isolate)",
       "metric": {
         "lr": "LR",
         "grad_norm": "Grad norm",
