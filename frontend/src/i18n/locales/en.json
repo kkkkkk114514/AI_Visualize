@@ -38,7 +38,8 @@
       "metrics": "Metrics & probes",
       "nodes": "Nodes",
       "graph": "Graph editor",
-      "check": "Checks"
+      "check": "Checks",
+      "nodeHelp": "Node guide"
     },
     "empty": {
       "config": "Nothing to configure",
@@ -81,6 +82,27 @@
       "norm": "Normalization",
       "seq": "Sequence",
       "combine": "Combine"
+    },
+    "desc": {
+      "Input": "Graph entry: declares the input tensor shape (batch size excluded); the shape follows the selected dataset.",
+      "Output": "Graph exit: checks the last dim matches the class count (classification) or is any width (regression). It never alters the tensor.",
+      "Linear": "Fully connected layer: maps the last dim to out_features — the usual classification head or a dimension change.",
+      "Activation": "Element-wise nonlinearity (ReLU / GELU / Tanh …) that lets the network fit nonlinear relations.",
+      "Flatten": "Flattens everything after start_dim; the usual step before feeding conv features into a Linear layer.",
+      "Dropout": "Randomly zeroes activations with probability p while training to curb overfitting; it is a no-op at inference.",
+      "Conv2d": "2D convolution: sliding windows extract local spatial features; channels, kernel, stride and padding are tunable.",
+      "MaxPool2d": "Max pooling: downsamples by taking the max in each window, keeping the strongest responses.",
+      "AvgPool2d": "Average pooling: downsamples by averaging each window, giving smoother outputs than max pooling.",
+      "AdaptiveAvgPool2d": "Adaptive average pooling: squashes any spatial size to a fixed output_size; 1 means global average pooling.",
+      "BatchNorm2d": "Normalizes 4D feature maps (N,C,H,W) per channel to speed up convergence; typically between conv and activation.",
+      "BatchNorm1d": "Normalizes (N,C) or (N,C,L) tensors per feature; used for fully connected and sequence features.",
+      "LayerNorm": "Normalizes along the last dim, independent of batch size — the standard norm inside Transformers.",
+      "Embedding": "Looks up integer token ids as dense vectors; the entry point of text and sequence models.",
+      "PositionalEncoding": "Injects position information (learned or sinusoidal) because attention alone cannot tell order.",
+      "LSTM": "Recurrent layer: walks the sequence step by step keeping a memory state; can be bidirectional and return all steps or just the last.",
+      "MultiHeadAttention": "Multi-head self-attention: aggregates information within the sequence by relevance; with the causal mask each position only sees the left.",
+      "ResidualAdd": "Residual sum: adds two same-shaped inputs element-wise, the building block of skip connections.",
+      "Concat": "Concatenates several inputs along one dim (other dims must match); used to fuse branches."
     }
   },
   "param": {
@@ -129,6 +151,8 @@
     "undo": "Undo",
     "redo": "Redo",
     "shortcuts": "Shortcuts: Ctrl+Z undo · Ctrl+Y redo · Ctrl+C/V copy-paste · Delete",
+    "paletteHint": "Drag a node onto the canvas, or right-click empty canvas to pick one",
+    "pickNode": "Create node here",
     "readOnlyPaletteHint": "Presets are read-only — clone one to edit",
     "datasetBound": "Shape comes from the dataset and cannot be edited",
     "zeroMeansKernel": "Empty means kernel size",

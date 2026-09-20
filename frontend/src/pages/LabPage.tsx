@@ -12,6 +12,7 @@ import { LanguageSwitch } from "../components/LanguageSwitch";
 import { Panel } from "../components/Panel";
 import { GraphEditor } from "../panels/GraphEditor/GraphEditor";
 import { IssuesPanel } from "../panels/GraphEditor/IssuesPanel";
+import { NodeDescriptions } from "../panels/GraphEditor/NodeDescriptions";
 import { NodePalette } from "../panels/GraphEditor/NodePalette";
 import { useGraphInfer } from "../panels/GraphEditor/useGraphInfer";
 import { emptyGraph } from "../graph/ir";
@@ -138,9 +139,18 @@ export default function LabPage() {
                 </Panel>
               </Allotment.Pane>
               <Allotment.Pane minSize={280} preferredSize="24%">
-                <Panel title={t("lab.zones.check")}>
-                  <IssuesPanel />
-                </Panel>
+                <Allotment vertical>
+                  <Allotment.Pane minSize={120}>
+                    <Panel title={t("lab.zones.check")}>
+                      <IssuesPanel />
+                    </Panel>
+                  </Allotment.Pane>
+                  <Allotment.Pane minSize={140}>
+                    <Panel title={t("lab.zones.nodeHelp")}>
+                      <NodeDescriptions />
+                    </Panel>
+                  </Allotment.Pane>
+                </Allotment>
               </Allotment.Pane>
             </Allotment>
           </ReactFlowProvider>
