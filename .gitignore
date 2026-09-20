@@ -1,0 +1,17 @@
+# 运行数据与构建产物
+data/
+frontend/dist/
+frontend/node_modules/
+.tmp/
+
+# Python
+backend/.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

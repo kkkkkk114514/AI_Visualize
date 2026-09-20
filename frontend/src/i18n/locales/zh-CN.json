@@ -1,0 +1,65 @@
+{
+  "app": {
+    "title": "AI 模型可视化实验室",
+    "subtitle": "真实训练 · 实时可视化"
+  },
+  "nav": {
+    "backToLibrary": "返回模型库"
+  },
+  "library": {
+    "title": "模型库",
+    "intro": "选择一个模型进入工作台，观察它真实训练时的结构与数据流。",
+    "newModel": "新建空白模型",
+    "sections": {
+      "ml": "机器学习",
+      "dl": "深度学习",
+      "rl": "强化学习"
+    },
+    "empty": "暂无预置模型",
+    "loadError": "模型库加载失败",
+    "retry": "重试"
+  },
+  "lab": {
+    "title": "工作台",
+    "zones": {
+      "config": "配置",
+      "main": "主视图",
+      "metrics": "指标与探针"
+    },
+    "empty": {
+      "config": "暂无可配置项",
+      "main": "暂无内容",
+      "metrics": "暂无数据"
+    }
+  },
+  "run": {
+    "controls": {
+      "start": "开始训练",
+      "pause": "暂停",
+      "resume": "继续",
+      "stop": "停止"
+    },
+    "status": {
+      "idle": "空闲",
+      "running": "训练中",
+      "paused": "已暂停",
+      "finished": "已完成",
+      "stopped": "已停止",
+      "failed": "失败"
+    }
+  },
+  "device": {
+    "loading": "检测中",
+    "cpu": "CPU",
+    "cuda": "GPU",
+    "cpuCores": "{{count}} 核"
+  },
+  "connection": {
+    "connected": "已连接",
+    "connecting": "连接中",
+    "disconnected": "未连接"
+  },
+  "common": {
+    "loading": "加载中…"
+  }
+}

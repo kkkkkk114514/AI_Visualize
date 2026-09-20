@@ -1,0 +1,65 @@
+{
+  "app": {
+    "title": "AI Visualize Lab",
+    "subtitle": "Real training · Live visualization"
+  },
+  "nav": {
+    "backToLibrary": "Back to library"
+  },
+  "library": {
+    "title": "Model Library",
+    "intro": "Pick a model to open its workbench and watch how it really trains.",
+    "newModel": "New blank model",
+    "sections": {
+      "ml": "Machine Learning",
+      "dl": "Deep Learning",
+      "rl": "Reinforcement Learning"
+    },
+    "empty": "No preset models yet",
+    "loadError": "Failed to load the model library",
+    "retry": "Retry"
+  },
+  "lab": {
+    "title": "Workbench",
+    "zones": {
+      "config": "Config",
+      "main": "Main view",
+      "metrics": "Metrics & probes"
+    },
+    "empty": {
+      "config": "Nothing to configure",
+      "main": "Nothing here yet",
+      "metrics": "No data yet"
+    }
+  },
+  "run": {
+    "controls": {
+      "start": "Start training",
+      "pause": "Pause",
+      "resume": "Resume",
+      "stop": "Stop"
+    },
+    "status": {
+      "idle": "Idle",
+      "running": "Running",
+      "paused": "Paused",
+      "finished": "Finished",
+      "stopped": "Stopped",
+      "failed": "Failed"
+    }
+  },
+  "device": {
+    "loading": "Detecting",
+    "cpu": "CPU",
+    "cuda": "GPU",
+    "cpuCores": "{{count}} cores"
+  },
+  "connection": {
+    "connected": "Connected",
+    "connecting": "Connecting",
+    "disconnected": "Disconnected"
+  },
+  "common": {
+    "loading": "Loading…"
+  }
+}
