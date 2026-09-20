@@ -15,9 +15,14 @@ import { IssuesPanel } from "../panels/GraphEditor/IssuesPanel";
 import { NodeDescriptions } from "../panels/GraphEditor/NodeDescriptions";
 import { NodePalette } from "../panels/GraphEditor/NodePalette";
 import { useGraphInfer } from "../panels/GraphEditor/useGraphInfer";
+import { MetricsCharts } from "../panels/MetricsCharts/MetricsCharts";
+import { RunControls } from "../panels/RunControls/RunControls";
+import { RunList } from "../panels/RunList/RunList";
+import { TrainingConfig } from "../panels/TrainingConfig/TrainingConfig";
 import { emptyGraph } from "../graph/ir";
 import { localizedText } from "../i18n/localized";
 import { useGraphStore } from "../stores/graphStore";
+import { useRunStore } from "../stores/runStore";
 
 export default function LabPage() {
   const { t, i18n } = useTranslation();
@@ -25,18 +30,25 @@ export default function LabPage() {
   const load = useGraphStore((state) => state.load);
   const cloneAsCopy = useGraphStore((state) => state.cloneAsCopy);
   const readOnly = useGraphStore((state) => state.readOnly);
-  const source = useGraphStore((state) => state.source);
   const dirty = useGraphStore((state) => state.dirty);
   const meta = useGraphStore((state) => state.meta);
+  const refresh = useRunStore((state) => state.refresh);
+  const applyConfigDefaults = useRunStore((state) => state.applyConfigDefaults);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   useEffect(() => {
     let cancelled = false;
     setStatus("loading");
     setLoadError(null);
     if (graphId === "new") {
-      load(emptyGraph(), { readOnly: false, source: "new" });
+      const graph = emptyGraph();
+      load(graph, { readOnly: false, source: "new" });
+      applyConfigDefaults(graph.hyper_defaults);
       setStatus("ready");
       return () => {
         cancelled = true;
@@ -46,6 +58,7 @@ export default function LabPage() {
       .then((detail) => {
         if (cancelled) return;
         load(detail.graph, { readOnly: detail.source === "preset", source: detail.source === "preset" ? "preset" : "user" });
+        applyConfigDefaults(detail.graph.hyper_defaults);
         setStatus("ready");
       })
       .catch((error: unknown) => {
@@ -56,7 +69,7 @@ export default function LabPage() {
     return () => {
       cancelled = true;
     };
-  }, [graphId, load]);
+  }, [graphId, load, applyConfigDefaults]);
 
   useGraphInfer(status === "ready");
 
@@ -95,24 +108,7 @@ export default function LabPage() {
           </>
         }
       />
-      <div className="run-bar">
-        <button type="button" className="btn btn--primary" disabled>
-          {t("run.controls.start")}
-        </button>
-        <button type="button" className="btn" disabled>
-          {t("run.controls.pause")}
-        </button>
-        <button type="button" className="btn" disabled>
-          {t("run.controls.stop")}
-        </button>
-        <span className="run-bar__status">{t("run.status.idle")}</span>
-        <span className="run-bar__spacer" />
-        {readOnly ? (
-          <span className="run-bar__note">{t("lab.presetGraph")}</span>
-        ) : source === "new" ? (
-          <span className="run-bar__note">{t("lab.newGraph")}</span>
-        ) : null}
-      </div>
+      <RunControls />
       <div className="lab-body">
         {status === "error" ? (
           <div className="error-state">
@@ -128,26 +124,49 @@ export default function LabPage() {
         ) : (
           <ReactFlowProvider>
             <Allotment>
-              <Allotment.Pane minSize={220} preferredSize="18%">
-                <Panel title={t("lab.zones.nodes")}>
-                  <NodePalette />
-                </Panel>
+              <Allotment.Pane minSize={240} preferredSize="20%">
+                <Allotment vertical>
+                  <Allotment.Pane minSize={160}>
+                    <Panel title={t("lab.zones.nodes")}>
+                      <NodePalette />
+                    </Panel>
+                  </Allotment.Pane>
+                  <Allotment.Pane minSize={240}>
+                    <Panel title={t("lab.zones.config")}>
+                      <TrainingConfig />
+                    </Panel>
+                  </Allotment.Pane>
+                </Allotment>
               </Allotment.Pane>
               <Allotment.Pane minSize={460}>
-                <Panel title={t("lab.zones.graph")}>
-                  <GraphEditor />
-                </Panel>
-              </Allotment.Pane>
-              <Allotment.Pane minSize={280} preferredSize="24%">
                 <Allotment vertical>
-                  <Allotment.Pane minSize={120}>
+                  <Allotment.Pane minSize={220} preferredSize="58%">
+                    <Panel title={t("lab.zones.graph")}>
+                      <GraphEditor />
+                    </Panel>
+                  </Allotment.Pane>
+                  <Allotment.Pane minSize={180}>
+                    <Panel title={t("lab.zones.metrics")}>
+                      <MetricsCharts />
+                    </Panel>
+                  </Allotment.Pane>
+                </Allotment>
+              </Allotment.Pane>
+              <Allotment.Pane minSize={300} preferredSize="26%">
+                <Allotment vertical>
+                  <Allotment.Pane minSize={120} preferredSize="30%">
                     <Panel title={t("lab.zones.check")}>
                       <IssuesPanel />
                     </Panel>
                   </Allotment.Pane>
-                  <Allotment.Pane minSize={140}>
+                  <Allotment.Pane minSize={140} preferredSize="34%">
                     <Panel title={t("lab.zones.nodeHelp")}>
                       <NodeDescriptions />
+                    </Panel>
+                  </Allotment.Pane>
+                  <Allotment.Pane minSize={140}>
+                    <Panel title={t("lab.zones.runs")}>
+                      <RunList />
                     </Panel>
                   </Allotment.Pane>
                 </Allotment>

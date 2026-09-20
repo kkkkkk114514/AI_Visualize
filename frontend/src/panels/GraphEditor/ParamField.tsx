@@ -66,8 +66,9 @@ export function ParamField({ spec, value, readOnly, onChange }: Props) {
     );
   }
 
-  const commit = () => {
-    const parsed = spec.kind === "int" ? Number.parseInt(draft, 10) : Number.parseFloat(draft);
+  // 提交读事件里的实时值：同一 tick 内连续 input+blur 时，闭包里的 draft 还是旧值
+  const commit = (raw: string) => {
+    const parsed = spec.kind === "int" ? Number.parseInt(raw, 10) : Number.parseFloat(raw);
     if (Number.isNaN(parsed)) {
       setDraft(String(value ?? ""));
       return;
@@ -87,7 +88,7 @@ export function ParamField({ spec, value, readOnly, onChange }: Props) {
         step={spec.step ?? (spec.kind === "int" ? 1 : 0.01)}
         disabled={readOnly}
         onChange={(event) => setDraft(event.target.value)}
-        onBlur={commit}
+        onBlur={(event) => commit(event.currentTarget.value)}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
             event.currentTarget.blur();

@@ -33,13 +33,14 @@
     "presetGraph": "预置模型为只读；克隆为副本后可自由编辑并训练。",
     "loadError": "工作台加载失败",
     "zones": {
-      "config": "配置",
+      "config": "训练配置",
       "main": "主视图",
-      "metrics": "指标与探针",
+      "metrics": "训练曲线",
       "nodes": "节点",
       "graph": "图编辑器",
       "check": "检查与提示",
-      "nodeHelp": "节点说明"
+      "nodeHelp": "节点说明",
+      "runs": "历史 run"
     },
     "empty": {
       "config": "暂无可配置项",
@@ -50,18 +51,85 @@
   "run": {
     "controls": {
       "start": "开始训练",
+      "starting": "启动中…",
       "pause": "暂停",
       "resume": "继续",
       "stop": "停止"
     },
+    "blockedHint": "图还有错误：先修好「检查与提示」里的问题再开始训练",
     "status": {
       "idle": "空闲",
+      "created": "启动中",
       "running": "训练中",
       "paused": "已暂停",
       "finished": "已完成",
       "stopped": "已停止",
-      "failed": "失败"
-    }
+      "failed": "失败",
+      "interrupted": "已中断"
+    },
+    "metrics": {
+      "step": "步",
+      "epoch": "轮",
+      "elapsed": "耗时",
+      "best": "最优"
+    },
+    "dataset": {
+      "title": "数据集",
+      "pick": "数据集",
+      "cached": "已就绪",
+      "notCached": "未缓存",
+      "download": "下载并校验",
+      "manualHint": "或把官方压缩包放到数据目录",
+      "ready": "数据就绪",
+      "missing": "请先下载数据集",
+      "phase": {
+        "download": "下载中",
+        "verify": "校验中",
+        "done": "完成",
+        "error": "失败"
+      }
+    },
+    "hyper": {
+      "title": "超参数",
+      "optimizer": "优化器",
+      "optimizerName": {
+        "adam": "Adam",
+        "adamw": "AdamW",
+        "sgd": "SGD"
+      },
+      "loss": "损失函数",
+      "lossName": {
+        "cross_entropy": "交叉熵",
+        "mse": "均方误差"
+      },
+      "lr": "学习率",
+      "batchSize": "批大小",
+      "epochs": "训练轮数",
+      "gradClip": "梯度裁剪",
+      "trainSize": "训练样本数",
+      "valSize": "验证样本数",
+      "sizeHint": "0 = 用满整个数据集",
+      "lrLive": "训练中可改：下一个 step 生效",
+      "batchLive": "训练中可改：下一个 epoch 生效",
+      "lockedHint": "训练进行中：仅学习率与批大小可改（{{run}}）"
+    },
+    "chart": {
+      "source": "曲线来源：{{name}}",
+      "noSource": "尚未选择 run：开始训练或点选右侧历史 run",
+      "empty": "等待指标…",
+      "metric": {
+        "lr": "学习率",
+        "grad_norm": "梯度范数",
+        "throughput": "吞吐"
+      }
+    },
+    "list": {
+      "empty": "还没有训练记录",
+      "live": "进行中",
+      "delete": "删除",
+      "count": "共 {{total}} 条，显示最近 {{count}} 条"
+    },
+    "presetHint": "预置模型只读：可直接训练；克隆为副本后可自由编辑。"
   },
   "device": {
     "loading": "检测中",
@@ -225,6 +293,43 @@
     },
     "model": {
       "notFound": "模型不存在：{{id}}"
+    },
+    "dataset": {
+      "notFound": "数据集不存在：{{id}}",
+      "notCached": "数据集未缓存：请先下载或把官方文件放到 {{path}}",
+      "downloading": "数据集正在下载中"
+    },
+    "run": {
+      "unknown": "未知错误",
+      "needDataset": "请先选择数据集",
+      "needModel": "缺少模型或图：无法开始训练",
+      "startFailed": "启动训练失败",
+      "controlFailed": "控制命令失败",
+      "loadFailed": "读取 run 失败",
+      "deleteFailed": "删除 run 失败",
+      "notFound": "run 不存在：{{id}}",
+      "busy": "已有训练在进行中（{{run_id}}），请先停止",
+      "notActive": "该 run 已结束，无法再控制",
+      "conflict": "当前状态（{{status}}）不接受该命令",
+      "invalidHyper": "参数 {{param}} 取值非法",
+      "badAction": "未知控制命令：{{action}}",
+      "badMetric": "未知指标：{{names}}",
+      "deleteActive": "训练进行中：先停止再删除",
+      "stale": "{{seconds}}s 没有收到训练事件，进程可能卡住（未自动终止）",
+      "failed": "训练进程异常退出",
+      "spawnFailed": "训练进程启动失败"
+    }
+  },
+  "log": {
+    "run": {
+      "queued": "已提交训练，正在拉起子进程…",
+      "starting": "子进程已就绪（{{device}}），开始准备数据与模型",
+      "dataset": "数据就绪：训练 {{train}} 条 / 验证 {{val}} 条",
+      "batchSize": "下一轮起批大小改为 {{batch_size}}",
+      "bestSaved": "第 {{epoch}} 轮刷新最优（{{value}}），已保存权重",
+      "finished": "训练完成：{{epochs}} 轮，用时 {{elapsed_s}}s",
+      "lrApplied": "学习率将在下一个 step 生效：{{lr}}",
+      "batchApplied": "批大小将在下一个 epoch 生效：{{batch_size}}"
     }
   },
   "common": {

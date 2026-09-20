@@ -33,13 +33,14 @@
     "presetGraph": "Presets are read-only; clone one to edit and train.",
     "loadError": "Failed to load the workbench",
     "zones": {
-      "config": "Config",
+      "config": "Training config",
       "main": "Main view",
-      "metrics": "Metrics & probes",
+      "metrics": "Training curves",
       "nodes": "Nodes",
       "graph": "Graph editor",
       "check": "Checks",
-      "nodeHelp": "Node guide"
+      "nodeHelp": "Node guide",
+      "runs": "Run history"
     },
     "empty": {
       "config": "Nothing to configure",
@@ -50,18 +51,85 @@
   "run": {
     "controls": {
       "start": "Start training",
+      "starting": "Starting…",
       "pause": "Pause",
       "resume": "Resume",
       "stop": "Stop"
     },
+    "blockedHint": "The graph still has errors: fix the checks on the right before training",
     "status": {
       "idle": "Idle",
+      "created": "Starting",
       "running": "Running",
       "paused": "Paused",
       "finished": "Finished",
       "stopped": "Stopped",
-      "failed": "Failed"
-    }
+      "failed": "Failed",
+      "interrupted": "Interrupted"
+    },
+    "metrics": {
+      "step": "step",
+      "epoch": "epoch",
+      "elapsed": "elapsed",
+      "best": "best"
+    },
+    "dataset": {
+      "title": "Dataset",
+      "pick": "Dataset",
+      "cached": "Ready",
+      "notCached": "Not cached",
+      "download": "Download & verify",
+      "manualHint": "or drop the official archives into the data directory",
+      "ready": "data ready",
+      "missing": "download the dataset first",
+      "phase": {
+        "download": "Downloading",
+        "verify": "Verifying",
+        "done": "Done",
+        "error": "Failed"
+      }
+    },
+    "hyper": {
+      "title": "Hyperparameters",
+      "optimizer": "Optimizer",
+      "optimizerName": {
+        "adam": "Adam",
+        "adamw": "AdamW",
+        "sgd": "SGD"
+      },
+      "loss": "Loss",
+      "lossName": {
+        "cross_entropy": "Cross entropy",
+        "mse": "MSE"
+      },
+      "lr": "Learning rate",
+      "batchSize": "Batch size",
+      "epochs": "Epochs",
+      "gradClip": "Grad clip",
+      "trainSize": "Train samples",
+      "valSize": "Val samples",
+      "sizeHint": "0 = the whole split",
+      "lrLive": "Editable while running: applies next step",
+      "batchLive": "Editable while running: applies next epoch",
+      "lockedHint": "Run in progress: only learning rate and batch size stay editable ({{run}})"
+    },
+    "chart": {
+      "source": "Curves for {{name}}",
+      "noSource": "No run selected: start training or pick a run in the history",
+      "empty": "Waiting for metrics…",
+      "metric": {
+        "lr": "LR",
+        "grad_norm": "Grad norm",
+        "throughput": "Throughput"
+      }
+    },
+    "list": {
+      "empty": "No runs yet",
+      "live": "live",
+      "delete": "Delete",
+      "count": "{{total}} total · showing latest {{count}}"
+    },
+    "presetHint": "Presets are read-only: train directly, or clone a copy to edit."
   },
   "device": {
     "loading": "Detecting",
@@ -225,6 +293,43 @@
     },
     "model": {
       "notFound": "Model not found: {{id}}"
+    },
+    "dataset": {
+      "notFound": "Dataset not found: {{id}}",
+      "notCached": "Dataset not cached: download it first, or drop the official files into {{path}}",
+      "downloading": "Dataset is already downloading"
+    },
+    "run": {
+      "unknown": "Unknown error",
+      "needDataset": "Pick a dataset first",
+      "needModel": "Missing model or graph: cannot start training",
+      "startFailed": "Failed to start the run",
+      "controlFailed": "Control command failed",
+      "loadFailed": "Failed to load the run",
+      "deleteFailed": "Failed to delete the run",
+      "notFound": "Run not found: {{id}}",
+      "busy": "Another run is active ({{run_id}}); stop it first",
+      "notActive": "This run already finished and cannot be controlled",
+      "conflict": "The current status ({{status}}) does not accept that command",
+      "invalidHyper": "Invalid value for {{param}}",
+      "badAction": "Unknown control action: {{action}}",
+      "badMetric": "Unknown metric: {{names}}",
+      "deleteActive": "Run in progress: stop it before deleting",
+      "stale": "No training event for {{seconds}}s; the process may be stuck (not killed automatically)",
+      "failed": "The training process exited abnormally",
+      "spawnFailed": "Failed to spawn the training process"
+    }
+  },
+  "log": {
+    "run": {
+      "queued": "Run submitted, spawning the worker…",
+      "starting": "Worker is up ({{device}}); preparing data and model",
+      "dataset": "Data ready: {{train}} train / {{val}} val samples",
+      "batchSize": "Batch size becomes {{batch_size}} from the next epoch",
+      "bestSaved": "Epoch {{epoch}} set a new best ({{value}}); weights saved",
+      "finished": "Training finished: {{epochs}} epochs in {{elapsed_s}}s",
+      "lrApplied": "Learning rate applies on the next step: {{lr}}",
+      "batchApplied": "Batch size applies on the next epoch: {{batch_size}}"
     }
   },
   "common": {

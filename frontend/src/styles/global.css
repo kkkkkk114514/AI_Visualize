@@ -1057,3 +1057,382 @@ body {
   line-height: 1.45;
   color: var(--muted);
 }
+
+/* M2：训练控制条 */
+.run-bar {
+  gap: 14px;
+}
+
+.run-bar__buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.run-bar__metrics {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.run-bar__metric {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.run-bar__metric-label {
+  color: var(--faint);
+}
+
+.run-bar__metric strong {
+  font-weight: 600;
+}
+
+.run-bar__mono {
+  font-family: var(--mono);
+}
+
+.run-bar__note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 46%;
+}
+
+.run-bar__note--error {
+  color: #ffb4ae;
+}
+
+.run-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.run-state::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.run-state--created,
+.run-state--running {
+  color: #7ee787;
+  border-color: rgba(63, 185, 80, 0.4);
+  background: rgba(63, 185, 80, 0.1);
+}
+
+.run-state--paused {
+  color: #f0c674;
+  border-color: rgba(210, 153, 34, 0.4);
+  background: rgba(210, 153, 34, 0.12);
+}
+
+.run-state--failed {
+  color: #ffb4ae;
+  border-color: rgba(248, 81, 73, 0.4);
+  background: rgba(248, 81, 73, 0.1);
+}
+
+.run-state--interrupted {
+  color: var(--muted);
+}
+
+.badge--ok {
+  color: #7ee787;
+  border-color: rgba(63, 185, 80, 0.35);
+  background: rgba(63, 185, 80, 0.1);
+}
+
+/* M2：训练配置面板 */
+.config {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.config__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.config__title {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.config__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.config__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.config__dataset {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.config__meta {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.config__hint {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--faint);
+}
+
+.config-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.config-field__label {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.config-field__input {
+  width: 100%;
+  padding: 4px 8px;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.config-field__input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.config-field__input:disabled {
+  color: var(--faint);
+  background: var(--surface);
+  cursor: not-allowed;
+}
+
+.config__progress {
+  position: relative;
+  height: 20px;
+  overflow: hidden;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.config__progress-bar {
+  height: 100%;
+  background: var(--accent-soft);
+  border-right: 1px solid var(--accent);
+  transition: width 0.2s ease;
+}
+
+.config__progress-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 11px;
+  color: var(--text);
+}
+
+/* M2：训练曲线 */
+.charts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  min-height: 0;
+}
+
+.charts__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: none;
+}
+
+.charts__source {
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.charts__toggles {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+
+.charts__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.charts__toggle--on {
+  color: var(--text);
+}
+
+.charts__toggle input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.charts__body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.charts__main {
+  flex: 1;
+  min-height: 168px;
+}
+
+.charts__extra {
+  flex: none;
+  height: 96px;
+}
+
+.charts__empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--faint);
+  pointer-events: none;
+}
+
+.charts .u-legend {
+  font-size: 11px;
+}
+
+/* M2：历史 run */
+.runs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.runs__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.runs__row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 7px 9px 8px;
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.runs__row:hover {
+  border-color: var(--border-strong);
+}
+
+.runs__row--selected {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.runs__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.runs__name {
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runs__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.runs__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.runs__live {
+  font-size: 11px;
+  color: #7ee787;
+}
+
+.runs__delete {
+  padding: 1px 8px;
+  font-size: 11px;
+}
+
+.runs__empty,
+.runs__error {
+  font-size: 12.5px;
+  color: var(--faint);
+}
+
+.runs__footer {
+  font-size: 11px;
+  color: var(--faint);
+}

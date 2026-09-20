@@ -1,38 +1,53 @@
+import type { ApiErrorPayload } from "./types";
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    readonly payload: ApiErrorPayload | null = null,
   ) {
     super(message);
     this.name = "ApiError";
   }
 }
 
-export async function apiGet<T>(path: string): Promise<T> {
-  const response = await fetch(path, { headers: { Accept: "application/json" } });
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, {
+    ...init,
+    headers: { Accept: "application/json", ...(init?.headers ?? {}) },
+  });
   if (!response.ok) {
-    throw new ApiError(response.status, await readErrorDetail(response));
+    const payload = await readErrorPayload(response);
+    throw new ApiError(
+      response.status,
+      payload?.detail ?? payload?.message_key ?? `${response.status} ${response.statusText}`,
+      payload,
+    );
   }
   return (await response.json()) as T;
+}
+
+export async function apiGet<T>(path: string): Promise<T> {
+  return request<T>(path);
 }
 
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(path, {
+  return request<T>(path, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!response.ok) {
-    throw new ApiError(response.status, await readErrorDetail(response));
-  }
-  return (await response.json()) as T;
 }
 
-async function readErrorDetail(response: Response): Promise<string> {
+export async function apiDelete<T>(path: string): Promise<T> {
+  return request<T>(path, { method: "DELETE" });
+}
+
+async function readErrorPayload(response: Response): Promise<ApiErrorPayload | null> {
   try {
-    const payload = (await response.json()) as { error?: { detail?: string; message_key?: string } };
-    return payload.error?.detail ?? payload.error?.message_key ?? `${response.status} ${response.statusText}`;
+    const payload = (await response.json()) as { error?: ApiErrorPayload };
+    return payload.error ?? null;
   } catch {
-    return `${response.status} ${response.statusText}`;
+    return null;
   }
 }

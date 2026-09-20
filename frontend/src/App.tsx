@@ -6,6 +6,7 @@ import { wsClient } from "./api/ws";
 import LabPage from "./pages/LabPage";
 import LibraryPage from "./pages/LibraryPage";
 import { useAppStore } from "./stores/appStore";
+import { bindRunEvents } from "./stores/runStore";
 
 export default function App() {
   const { t, i18n } = useTranslation();
@@ -20,8 +21,12 @@ export default function App() {
   useEffect(() => {
     void loadHealth();
     const unsubscribe = wsClient.onStatus(setWsStatus);
+    const unbindRuns = bindRunEvents();
     wsClient.connect();
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      unbindRuns();
+    };
   }, [loadHealth, setWsStatus]);
 
   return (
