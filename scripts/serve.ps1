@@ -1,4 +1,4 @@
-# 生产模式：构建前端后由后端单端口托管（http://localhost:8000）
+# 生产模式：构建前端后由后端单端口托管（http://localhost:8410）
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
