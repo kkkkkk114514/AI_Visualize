@@ -1,0 +1,35 @@
+{
+  "ir_version": 1,
+  "id": "mlp-mnist",
+  "kind": "dl",
+  "task": "image_classification",
+  "name": { "zh": "MLP 手写数字分类", "en": "MLP Digit Classifier" },
+  "desc": { "zh": "两层全连接 + ReLU，MNIST 入门基线", "en": "Two FC layers with ReLU, the MNIST baseline" },
+  "hyper_defaults": {
+    "optimizer": "adam",
+    "lr": 0.001,
+    "batch_size": 64,
+    "epochs": 5,
+    "loss": "cross_entropy"
+  },
+  "probe_defaults": ["fc1", "fc2"],
+  "nodes": [
+    { "id": "input", "type": "Input", "params": { "shape": [1, 28, 28] }, "ui": { "x": 0, "y": 140 } },
+    { "id": "flat", "type": "Flatten", "params": { "start_dim": 1 }, "ui": { "x": 220, "y": 140 } },
+    { "id": "fc1", "type": "Linear", "params": { "out_features": 128, "bias": true }, "ui": { "x": 440, "y": 140 } },
+    { "id": "relu1", "type": "Activation", "params": { "name": "relu" }, "ui": { "x": 660, "y": 140 } },
+    { "id": "fc2", "type": "Linear", "params": { "out_features": 64, "bias": true }, "ui": { "x": 880, "y": 140 } },
+    { "id": "relu2", "type": "Activation", "params": { "name": "relu" }, "ui": { "x": 1100, "y": 140 } },
+    { "id": "head", "type": "Linear", "params": { "out_features": 10, "bias": true }, "ui": { "x": 1320, "y": 140 } },
+    { "id": "output", "type": "Output", "params": { "classes": 10 }, "ui": { "x": 1540, "y": 140 } }
+  ],
+  "edges": [
+    { "id": "e1", "source": "input", "source_port": "out", "target": "flat", "target_port": "in" },
+    { "id": "e2", "source": "flat", "source_port": "out", "target": "fc1", "target_port": "in" },
+    { "id": "e3", "source": "fc1", "source_port": "out", "target": "relu1", "target_port": "in" },
+    { "id": "e4", "source": "relu1", "source_port": "out", "target": "fc2", "target_port": "in" },
+    { "id": "e5", "source": "fc2", "source_port": "out", "target": "relu2", "target_port": "in" },
+    { "id": "e6", "source": "relu2", "source_port": "out", "target": "head", "target_port": "in" },
+    { "id": "e7", "source": "head", "source_port": "out", "target": "output", "target_port": "in" }
+  ]
+}

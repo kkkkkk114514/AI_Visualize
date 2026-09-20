@@ -1,0 +1,37 @@
+{
+  "ir_version": 1,
+  "id": "cnn-mnist",
+  "kind": "dl",
+  "task": "image_classification",
+  "name": { "zh": "CNN 手写数字分类", "en": "CNN Digit Classifier" },
+  "desc": { "zh": "两层卷积 + 全连接头，MNIST 上准确率更高", "en": "Two conv layers + FC head, higher accuracy on MNIST" },
+  "hyper_defaults": {
+    "optimizer": "adam",
+    "lr": 0.001,
+    "batch_size": 64,
+    "epochs": 5,
+    "loss": "cross_entropy"
+  },
+  "probe_defaults": ["conv1"],
+  "nodes": [
+    { "id": "input", "type": "Input", "params": { "shape": [1, 28, 28] }, "ui": { "x": 0, "y": 120 } },
+    { "id": "conv1", "type": "Conv2d", "params": { "out_channels": 16, "kernel_size": 3, "stride": 1, "padding": 1, "dilation": 1, "groups": 1 }, "ui": { "x": 220, "y": 120 } },
+    { "id": "relu1", "type": "Activation", "params": { "name": "relu" }, "ui": { "x": 440, "y": 120 } },
+    { "id": "pool1", "type": "MaxPool2d", "params": { "kernel_size": 2, "stride": 0, "padding": 0 }, "ui": { "x": 660, "y": 120 } },
+    { "id": "flat", "type": "Flatten", "params": { "start_dim": 1 }, "ui": { "x": 880, "y": 120 } },
+    { "id": "fc1", "type": "Linear", "params": { "out_features": 128, "bias": true }, "ui": { "x": 1100, "y": 120 } },
+    { "id": "relu2", "type": "Activation", "params": { "name": "relu" }, "ui": { "x": 1320, "y": 120 } },
+    { "id": "head", "type": "Linear", "params": { "out_features": 10, "bias": true }, "ui": { "x": 1540, "y": 120 } },
+    { "id": "output", "type": "Output", "params": { "classes": 10 }, "ui": { "x": 1760, "y": 120 } }
+  ],
+  "edges": [
+    { "id": "e1", "source": "input", "source_port": "out", "target": "conv1", "target_port": "in" },
+    { "id": "e2", "source": "conv1", "source_port": "out", "target": "relu1", "target_port": "in" },
+    { "id": "e3", "source": "relu1", "source_port": "out", "target": "pool1", "target_port": "in" },
+    { "id": "e4", "source": "pool1", "source_port": "out", "target": "flat", "target_port": "in" },
+    { "id": "e5", "source": "flat", "source_port": "out", "target": "fc1", "target_port": "in" },
+    { "id": "e6", "source": "fc1", "source_port": "out", "target": "relu2", "target_port": "in" },
+    { "id": "e7", "source": "relu2", "source_port": "out", "target": "head", "target_port": "in" },
+    { "id": "e8", "source": "head", "source_port": "out", "target": "output", "target_port": "in" }
+  ]
+}

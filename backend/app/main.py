@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import config
-from app.api import health, models, ws
+from app.api import graph, health, models, ws
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,6 +27,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title=config.SERVICE_NAME, version=config.SERVICE_VERSION, lifespan=lifespan)
 app.include_router(health.router)
 app.include_router(models.router)
+app.include_router(graph.router)
 app.include_router(ws.router)
 
 if config.FRONTEND_DIST.is_dir():
