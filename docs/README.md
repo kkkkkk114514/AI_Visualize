@@ -15,4 +15,4 @@
 - **前端**：React + TypeScript + Vite；`@xyflow/react`（图编辑）、`uPlot`（实时曲线）、`allotment`（面板布局）、`react-i18next`（中英双语）、`zustand`（状态）
 - **后端**：Python + FastAPI + uvicorn；PyTorch（真实训练，独立子进程）、scikit-learn（经典 ML）
 - **存储**：SQLite（run / 指标 / 快照索引）+ 本地文件（快照二进制、checkpoint、数据集缓存）
-- **交付**：本地 Web 应用，单端口（`localhost:8000`），GPU 可选自适应
+- **交付**：本地 Web 应用，单端口（`localhost:8410`），GPU 可选自适应
