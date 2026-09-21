@@ -260,7 +260,7 @@ def test_algo_dataset_kind_mismatch(client: TestClient) -> None:
     assert response.status_code == 422
     error = response.json()["error"]
     assert error["message_key"] == "errors.dataset.kindMismatch"
-    assert error["args"] == {"id": "gridworld", "kind": "ml", "expected": "synth2d"}
+    assert error["args"] == {"id": "gridworld", "kind": "ml", "expected": "csv2d / synth2d"}
 
     response = client.post("/api/runs", json={"graph": RL_SPEC, "dataset_id": "moons"})
     assert response.json()["error"]["args"] == {"id": "moons", "kind": "rl", "expected": "gridworld"}

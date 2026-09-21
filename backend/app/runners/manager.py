@@ -30,9 +30,9 @@ ALGO_ENTRY: dict[str, Any] = {
     algo_spec.KIND_ML: ml_runner.entry,
     algo_spec.KIND_RL: rl_runner.entry,
 }
-ALGO_DATASET_LOADER: dict[str, str] = {
-    algo_spec.KIND_ML: "synth2d",
-    algo_spec.KIND_RL: "gridworld",
+ALGO_DATASET_LOADERS: dict[str, frozenset[str]] = {
+    algo_spec.KIND_ML: frozenset({"synth2d", "csv2d"}),
+    algo_spec.KIND_RL: frozenset({"gridworld"}),
 }
 
 
@@ -176,7 +176,7 @@ class RunnerManager:
                 422,
                 "errors.dataset.kindMismatch",
                 "errors.dataset.kindMismatch",
-                {"id": spec.id, "kind": "dl", "expected": "image / text_char / synth2d"},
+                {"id": spec.id, "kind": "dl", "expected": "image / image_dir / text_char / synth2d / csv2d"},
             )
         if not registry.is_cached(spec):
             raise RunError(
@@ -280,13 +280,17 @@ class RunnerManager:
             raise RunError(
                 404, "errors.dataset.notFound", "errors.dataset.notFound", {"id": raw_dataset}
             )
-        expected = ALGO_DATASET_LOADER[algo.kind]
-        if dataset.loader != expected:
+        expected = ALGO_DATASET_LOADERS[algo.kind]
+        if dataset.loader not in expected:
             raise RunError(
                 422,
                 "errors.dataset.kindMismatch",
                 "errors.dataset.kindMismatch",
-                {"id": dataset.id, "kind": algo.kind, "expected": expected},
+                {
+                    "id": dataset.id,
+                    "kind": algo.kind,
+                    "expected": " / ".join(sorted(expected)),
+                },
             )
         algo = replace(algo, dataset_id=dataset.id)
 

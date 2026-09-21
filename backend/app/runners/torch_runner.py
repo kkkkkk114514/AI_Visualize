@@ -372,6 +372,7 @@ def entry(config: dict[str, Any], event_queue: Any, control_queue: Any) -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     # 形参 config（run 配置）遮蔽了同名模块，这里用别名取进程级设置
     torch.set_num_threads(app_config.TORCH_THREADS)
+    base.bootstrap()
     exit_code = run_training(config, event_queue, control_queue)
     event_queue.put({"type": base.EVENT_BYE, "exit_code": exit_code})
     sys.exit(exit_code)

@@ -51,6 +51,11 @@ DATASET_MIRRORS: tuple[str, ...] = tuple(
     "https://raw.githubusercontent.com/fgnt/mnist/master/",
 )
 
+# 数据集上传（docs/02 §7.5）：单文件大小上限（MB）
+UPLOAD_ZIP_MAX_MB = int(os.environ.get("AI_VISUALIZE_MAX_UPLOAD_MB", "") or 32)
+UPLOAD_CSV_MAX_MB = 2
+UPLOAD_TXT_MAX_MB = 5
+
 SERVICE_NAME = "AI-Visualize"
 SERVICE_VERSION = "0.1.0"
 

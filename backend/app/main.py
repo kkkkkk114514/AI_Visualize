@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from app import config
 from app.api import algos, datasets, graph, health, models, runs, ws
 from app.api.ws import hub
+from app.datasets import upload as dataset_upload
 from app.runners.manager import manager
 from app.store import db
 
@@ -24,6 +25,7 @@ log = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     config.ensure_data_dirs()
+    dataset_upload.register_all()
     db.init_db()
     loop = asyncio.get_running_loop()
     hub.bind_loop(loop)

@@ -11,7 +11,7 @@ import numpy as np
 
 from app.algos import ml as algo_ml
 from app.algos import spec as algo_spec
-from app.datasets import registry, synth2d
+from app.datasets import points2d, registry
 from app.probes import encode as probe_encode
 from app.probes.writer import SnapshotWriter
 from app.runners import base
@@ -20,20 +20,21 @@ log = logging.getLogger(__name__)
 
 GRID_SIDE = 96          # 决策网格边长（docs/02 §13.5）
 BOUNDARY_MARGIN = 0.05  # 训练集包围盒外扩比例
+ML_LOADERS = frozenset({"synth2d", "csv2d"})  # 二维点集：程序生成 + 上传（docs/02 §13.3）
 
 
-def _resolve_dataset(raw_id: Any) -> str:
-    """ML 只吃 `synth2d` 的四个二维合成集（docs/02 §13.3）。"""
+def _resolve_dataset(raw_id: Any) -> registry.DatasetSpec:
+    """ML 只吃二维点集（`synth2d` 四项 + 上传的 `csv2d`）。"""
     spec = registry.get_spec(raw_id) if isinstance(raw_id, str) else None
     if spec is None:
         raise base.RunFailed("dataset_not_found", "errors.dataset.notFound", {"id": raw_id})
-    if spec.loader != "synth2d":
+    if spec.loader not in ML_LOADERS:
         raise base.RunFailed(
             "dataset_kind_mismatch",
             "errors.dataset.kindMismatch",
-            {"id": spec.id, "kind": algo_spec.KIND_ML, "expected": "synth2d"},
+            {"id": spec.id, "kind": algo_spec.KIND_ML, "expected": " / ".join(sorted(ML_LOADERS))},
         )
-    return spec.id
+    return spec
 
 
 class BoundaryProbe:
@@ -43,7 +44,7 @@ class BoundaryProbe:
         self,
         probes: list[dict[str, Any]],
         model: algo_ml.MLModel,
-        dataset_id: str,
+        spec: registry.DatasetSpec,
         *,
         run_id: str,
         snapshots_dir: str,
@@ -53,7 +54,7 @@ class BoundaryProbe:
         node_id, kind = algo_spec.SINGLE_STREAM[algo_spec.KIND_ML]
         self.node_id, self.kind = node_id, kind
         self.every_n = int(probes[0]["every_n_steps"]) if probes else 0
-        x0, x1, y0, y1 = synth2d.bounds(dataset_id, BOUNDARY_MARGIN)
+        x0, x1, y0, y1 = points2d.bounds(spec, BOUNDARY_MARGIN)
         self.x_range = (x0, x1)
         self.y_range = (y0, y1)
         grid_x, grid_y = np.meshgrid(
@@ -114,15 +115,15 @@ def run_training(config: dict[str, Any], event_queue: Any, control_queue: Any) -
                 "invalid_algo", "errors.algo.badSpec", {"param": "kind"}, detail=str(algo.kind)
             )
 
-        dataset_id = _resolve_dataset(config.get("dataset_id"))
-        train_x, train_y, val_x, val_y = synth2d.split_arrays(dataset_id)
+        spec = _resolve_dataset(config.get("dataset_id"))
+        train_x, train_y, val_x, val_y = points2d.split_arrays(spec)
         seed = int(config.get("seed") or 0)
         model = algo_ml.build(algo.algo, train_x, train_y, algo.params, seed)
         delay_s = float(algo.params.get("render_delay_ms") or 0) / 1000.0
         probe = BoundaryProbe(
             config.get("probes") or [],
             model,
-            dataset_id,
+            spec,
             run_id=config["run_id"],
             snapshots_dir=config.get("snapshots_dir"),
             emit=event_queue.put,
@@ -267,6 +268,7 @@ def run_training(config: dict[str, Any], event_queue: Any, control_queue: Any) -
 def entry(config: dict[str, Any], event_queue: Any, control_queue: Any) -> None:
     """multiprocessing 入口（spawn 要求模块级函数）；纯 numpy，冷启动不加载 torch。"""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    base.bootstrap()
     exit_code = run_training(config, event_queue, control_queue)
     event_queue.put({"type": base.EVENT_BYE, "exit_code": exit_code})
     sys.exit(exit_code)

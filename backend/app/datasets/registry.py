@@ -85,6 +85,9 @@ MNIST = DatasetSpec(
 
 SPECS: dict[str, DatasetSpec] = {MNIST.id: MNIST}
 
+# 上传集 id（docs/02 §7.5）：upload 模块在注入 / 删除时维护，列表据此标记可否删除
+UPLOADED: set[str] = set()
+
 TEXT_SEQ_LEN = 32
 
 ALICE = DatasetSpec(
@@ -305,6 +308,7 @@ def cache_state(spec: DatasetSpec) -> dict[str, Any]:
         "name": spec.name,
         "task": spec.task,
         "loader": spec.loader,
+        "uploaded": spec.id in UPLOADED,
         "input_shape": list(spec.input_shape),
         "num_classes": vocab if vocab else spec.num_classes,
         "vocab_size": vocab,

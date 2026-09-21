@@ -125,6 +125,17 @@ def status_event(status: str, *, step: int = 0, epoch: int = 0, elapsed_s: float
 # ---------------------------------------------------------------- 子进程公共设施
 
 
+def bootstrap() -> None:
+    """子进程入口的公共前置：把上传数据集清单注入注册表（docs/02 §7.5）。
+
+    manager 在主进程 lifespan 里已注入一次；spawn 出来的训练子进程是全新解释器，
+    解析 `dataset_id` 前必须自己再读一遍 uploads.json。
+    """
+    from app.datasets import upload
+
+    upload.register_all()
+
+
 class RunFailed(Exception):
     """训练前置失败（数据集 / 图 / 超参 / algo spec）：带定位信息，转 error 事件。"""
 

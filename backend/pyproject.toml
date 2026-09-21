@@ -5,6 +5,7 @@ description = "AI-Visualize 本地服务：图 IR、训练运行时与可视化�
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
+    "python-multipart>=0.0.9",
     "uvicorn[standard]>=0.30",
     "numpy>=1.26",
     "pillow>=10.0",

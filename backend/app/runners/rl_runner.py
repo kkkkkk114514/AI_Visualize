@@ -228,6 +228,7 @@ def run_training(config: dict[str, Any], event_queue: Any, control_queue: Any) -
 def entry(config: dict[str, Any], event_queue: Any, control_queue: Any) -> None:
     """multiprocessing 入口（spawn 要求模块级函数）；纯 numpy，冷启动不加载 torch。"""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    base.bootstrap()
     exit_code = run_training(config, event_queue, control_queue)
     event_queue.put({"type": base.EVENT_BYE, "exit_code": exit_code})
     sys.exit(exit_code)

@@ -12,7 +12,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
-from app.datasets import registry, synth2d
+from app.datasets import csv2d, registry, synth2d
 
 DEFAULT_TRAIN_SIZE = 20000
 DEFAULT_VAL_SIZE = 5000
@@ -85,6 +85,24 @@ def build_loaders(
         )
     if spec.loader == "synth2d":
         return _build_synth2d_loaders(
+            spec,
+            batch_size=batch_size,
+            train_size=train_size,
+            val_size=val_size,
+            seed=seed,
+            shuffle=shuffle,
+        )
+    if spec.loader == "csv2d":
+        return _build_csv2d_loaders(
+            spec,
+            batch_size=batch_size,
+            train_size=train_size,
+            val_size=val_size,
+            seed=seed,
+            shuffle=shuffle,
+        )
+    if spec.loader == "image_dir":
+        return _build_image_dir_loaders(
             spec,
             batch_size=batch_size,
             train_size=train_size,
@@ -238,12 +256,73 @@ def _build_synth2d_loaders(
     )
 
 
+def _build_csv2d_loaders(
+    spec: registry.DatasetSpec,
+    *,
+    batch_size: int,
+    train_size: int,
+    val_size: int,
+    seed: int,
+    shuffle: bool,
+) -> tuple[DataLoader, DataLoader, dict[str, Any]]:
+    """上传点集：解析 csv 后 seed 42 打乱 80/20（docs/02 §7.5），(N,2) float32 + int64。"""
+    train_x, train_y, val_x, val_y = csv2d.split_arrays(spec)
+    if train_size > 0:
+        train_x, train_y = train_x[:train_size], train_y[:train_size]
+    if val_size > 0:
+        val_x, val_y = val_x[:val_size], val_y[:val_size]
+    return _make_loaders(
+        torch.from_numpy(np.ascontiguousarray(train_x)),
+        torch.from_numpy(np.ascontiguousarray(train_y)),
+        torch.from_numpy(np.ascontiguousarray(val_x)),
+        torch.from_numpy(np.ascontiguousarray(val_y)),
+        batch_size=batch_size,
+        seed=seed,
+        shuffle=shuffle,
+    )
+
+
+def _build_image_dir_loaders(
+    spec: registry.DatasetSpec,
+    *,
+    batch_size: int,
+    train_size: int,
+    val_size: int,
+    seed: int,
+    shuffle: bool,
+) -> tuple[DataLoader, DataLoader, dict[str, Any]]:
+    """上传图片集：读上传时写定的 data.npz（uint8 CHW，切分与 mean/std 同文件固化）。"""
+    item = spec.files[0] if spec.files else None
+    path = registry.locate(spec, item) if item is not None else None
+    if path is None:
+        raise FileNotFoundError(f"数据集未缓存：{spec.id}")
+    with np.load(path) as blob:
+        train_x = blob["train_x"]
+        train_y = blob["train_y"]
+        val_x = blob["val_x"]
+        val_y = blob["val_y"]
+    if train_size > 0:
+        train_x, train_y = train_x[:train_size], train_y[:train_size]
+    if val_size > 0:
+        val_x, val_y = val_x[:val_size], val_y[:val_size]
+    return _make_loaders(
+        torch.from_numpy(np.ascontiguousarray(train_x)),
+        torch.from_numpy(np.ascontiguousarray(train_y)),
+        torch.from_numpy(np.ascontiguousarray(val_x)),
+        torch.from_numpy(np.ascontiguousarray(val_y)),
+        batch_size=batch_size,
+        seed=seed,
+        shuffle=shuffle,
+        extra_info={"num_classes": int(spec.num_classes)},
+    )
+
+
 def normalize(batch: torch.Tensor, meta: dict[str, Any]) -> torch.Tensor:
-    """图像：uint8 → float32 并做 (x/255 - mean) / std；文本：词 id 保持 int64；合成集：已是 float32。"""
+    """图像：uint8 → float32 并做 (x/255 - mean) / std；文本：词 id 保持 int64；点集：已是 float32。"""
     loader = meta.get("loader")
     if loader == "text_char":
         return batch.to(torch.long)
-    if loader == "synth2d":
+    if loader in ("synth2d", "csv2d"):
         return batch.to(torch.float32)
     x = batch.to(torch.float32).div_(255.0)
     mean = float(meta.get("mean") or 0.0)
