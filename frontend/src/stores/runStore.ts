@@ -14,6 +14,7 @@ import {
 } from "../api/runs";
 import { clearSnapshotCache, listSnapshots } from "../api/snapshots";
 import type {
+  AlgoSpec,
   DatasetInfo,
   MetricName,
   MetricSeries,
@@ -40,6 +41,18 @@ export const METRIC_NAMES: MetricName[] = [
   "grad_norm",
   "throughput",
   "vram_mb",
+  "margin",
+  "n_sv",
+  "depth",
+  "leaves",
+  "n_nodes",
+  "n_trees",
+  "reward",
+  "q_delta",
+  "episode_reward",
+  "epsilon",
+  "episode_steps",
+  "success",
 ];
 
 /** 环形缓冲窗口：最多保留最近 N 个 step 点（docs/02 §9.2 实时曲线） */
@@ -217,6 +230,14 @@ export interface ProbeChoice {
   kind: ProbeKind;
 }
 
+/**
+ * 启动来源：DL 提交图 IR（预置未改动时只给 model_id），ML / RL 提交 algo spec
+ * （改过参数 → 内联 `graph`，未改动 → `model_id`，docs/02 §13.6）。
+ */
+export type RunSource =
+  | { kind: "dl"; graph: unknown; modelId?: string }
+  | { kind: "algo"; graph?: AlgoSpec; modelId?: string };
+
 /** 默认采样间隔与每流快照上限（对齐后端 `config.PROBE_*`）。 */
 export const DEFAULT_PROBE_EVERY_N = 50;
 export const PROBE_SNAPSHOT_WINDOW = 200;
@@ -281,7 +302,7 @@ interface RunState {
   setProbeEveryN: (everyN: number) => void;
   setProbeStream: (stream: string | null) => void;
   setCursorStep: (step: number | null) => void;
-  start: (graph: unknown, modelId?: string) => Promise<void>;
+  start: (source: RunSource) => Promise<void>;
   pause: () => Promise<void>;
   resume: () => Promise<void>;
   stop: () => Promise<void>;
@@ -537,40 +558,49 @@ export const useRunStore = create<RunState>((set, get) => {
 
     setCursorStep: (step) => set({ cursorStep: step }),
 
-    start: async (graph, modelId) => {
+    start: async (source) => {
       const state = get();
       if (state.starting) return;
+      // 分派只看 source.kind：ML / RL 预置未改参数时只有 model_id、没有内联 spec，
+      // 不能拿「有没有内联 graph」当判据（docs/02 §13.6）。
       const datasetId = state.datasetId;
-      if (!datasetId) {
+      if (source.kind === "dl" && !datasetId) {
         set({ startError: { code: "no_dataset", messageKey: "errors.run.needDataset", args: {} } });
         return;
       }
       set({ starting: true, startError: null, runError: null, logs: [], replay: null });
       try {
-        const probes: ProbeSpec[] = state.probeChoices.map((choice) => ({
-          node_id: choice.nodeId,
-          kind: choice.kind,
-          every_n_steps: state.probeEveryN,
-        }));
-        const run = await startRun({
-          graph: modelId ? undefined : graph,
-          model_id: modelId,
-          dataset_id: datasetId,
-          hyperparams: state.config,
-          probes,
-        });
+        // ML / RL 的参数都在 spec 里（hyperparams 固定空）；单流探针由后端按 spec 的
+        // `probe_defaults.every_n_steps` 挂上（docs/02 §13.4），前端不提交 probes；
+        // `dataset_id` 只有内联 spec 时才带（预置由后端读其 dataset_id，§13.4）。
+        const body =
+          source.kind === "algo"
+            ? {
+                graph: source.graph,
+                model_id: source.modelId,
+                dataset_id: source.graph?.dataset_id,
+                hyperparams: {},
+              }
+            : {
+                graph: source.modelId ? undefined : source.graph,
+                model_id: source.modelId,
+                dataset_id: datasetId ?? undefined,
+                hyperparams: state.config,
+                probes: state.probeChoices.map(
+                  (choice): ProbeSpec => ({
+                    node_id: choice.nodeId,
+                    kind: choice.kind,
+                    every_n_steps: state.probeEveryN,
+                  }),
+                ),
+              };
+        const run = await startRun(body);
         metricsBuffer.reset();
         clearSnapshotCache();
         wsClient.subscribe(run.id);
         applySummary(run);
-        set({
-          starting: false,
-          snapshots: {},
-          snapshotRunId: run.id,
-          metricsRunId: run.id,
-          probeStream: probes.length > 0 ? probeStreamKey(state.probeChoices[0]) : null,
-          cursorStep: null,
-        });
+        adoptRunProbes(run);
+        set({ starting: false, metricsRunId: run.id });
         pushLog({ id: logSeq++, level: "info", key: "log.run.queued", args: {}, at: Date.now() });
         void get().loadHistory();
       } catch (error) {

@@ -49,13 +49,16 @@
       "check": "Checks",
       "nodeHelp": "Node guide",
       "runs": "Run history",
-      "probe": "Probes"
+      "probe": "Probes",
+      "boundary": "Decision boundary",
+      "grid": "GridWorld"
     },
     "empty": {
       "config": "Nothing to configure",
       "main": "Nothing here yet",
       "metrics": "No data yet"
-    }
+    },
+    "algoDirty": "Parameters changed — applies to the next run"
   },
   "run": {
     "controls": {
@@ -174,7 +177,24 @@
       "metric": {
         "lr": "LR",
         "grad_norm": "Grad norm",
-        "throughput": "Throughput"
+        "throughput": "Throughput",
+        "loss": "Loss",
+        "acc": "Accuracy",
+        "val_loss": "Val loss",
+        "val_acc": "Val accuracy",
+        "vram_mb": "VRAM",
+        "margin": "Margin",
+        "n_sv": "Support vectors",
+        "depth": "Depth",
+        "leaves": "Leaves",
+        "n_nodes": "Nodes",
+        "n_trees": "Trees",
+        "reward": "Step reward",
+        "q_delta": "Q delta",
+        "episode_reward": "Episode reward",
+        "epsilon": "ε (explore)",
+        "episode_steps": "Episode steps",
+        "success": "Success"
       }
     },
     "list": {
@@ -367,7 +387,10 @@
     "dataset": {
       "notFound": "Dataset not found: {{id}}",
       "notCached": "Dataset not cached: download it first, or drop the official files into {{path}}",
-      "downloading": "Dataset is already downloading"
+      "downloading": "Dataset is already downloading",
+      "noPoints": "Dataset has no 2-D points: {{id}}",
+      "badSplit": "Unknown split: {{split}} (choose {{choices}})",
+      "kindMismatch": "Dataset {{id}} does not match {{kind}} models: it needs {{loader}}"
     },
     "run": {
       "unknown": "Unknown error",
@@ -394,10 +417,17 @@
       "unknownNode": "Probe target node not found: {{node_id}}",
       "badKind": "Invalid probe kind: {{kind}} (node {{node_id}})",
       "badValue": "Invalid probe parameter: {{param}}",
-      "kindMismatch": "Tensor shape does not match probe kind {{kind}}: {{shape}}"
+      "kindMismatch": "Tensor shape does not match probe kind {{kind}}: {{shape}}",
+      "badStream": "This model only accepts a single probe stream: {{expected}}"
     },
     "snapshot": {
       "notFound": "Snapshot not found: {{id}}"
+    },
+    "algo": {
+      "badValue": "Invalid value for {{param}} (wrong type, out of range, or not a choice)",
+      "badSpec": "Invalid model spec: {{param}}",
+      "badEnv": "Invalid environment field {{param}} (out of bounds, or conflicting start / goal / obstacles / rewards)",
+      "unknownAlgo": "Unknown algorithm {{algo}}, or it is not an {{kind}} algorithm"
     }
   },
   "log": {
@@ -410,7 +440,9 @@
       "finished": "Training finished: {{epochs}} epochs in {{elapsed_s}}s",
       "lrApplied": "Learning rate applies on the next step: {{lr}}",
       "batchApplied": "Batch size applies on the next epoch: {{batch_size}}",
-      "textCorpus": "Char corpus: vocab {{vocab_size}}, sequence length {{seq_len}}"
+      "textCorpus": "Char corpus: vocab {{vocab_size}}, sequence length {{seq_len}}",
+      "env": "Environment ready: {{width}}×{{height}}, {{obstacles}} obstacles · {{rewards}} rewards",
+      "batchIgnored": "This algorithm updates step by step: batch size ignored"
     },
     "probe": {
       "attached": "{{n}} probe streams attached",
@@ -420,5 +452,98 @@
   },
   "common": {
     "loading": "Loading…"
+  },
+  "algo": {
+    "params": {
+      "title": "Algorithm parameters"
+    },
+    "classes": "classes",
+    "probeNote": "Snapshot every {{n}} steps",
+    "choice": {
+      "linear": "Linear kernel",
+      "rbf": "RBF kernel"
+    },
+    "common": {
+      "lr": "Learning rate",
+      "epochs": "Iterations",
+      "batchSize": "Batch size",
+      "l2": "L2 penalty",
+      "renderDelay": "Render delay (ms)",
+      "everyN": "Snapshot interval"
+    },
+    "tree": {
+      "maxDepth": "Max depth",
+      "minSamplesLeaf": "Min samples per leaf",
+      "maxNodes": "Max nodes"
+    },
+    "forest": {
+      "nEstimators": "Trees",
+      "maxDepth": "Max depth",
+      "minSamplesLeaf": "Min samples per leaf",
+      "featureFraction": "Feature fraction"
+    },
+    "svm": {
+      "kernel": "Kernel",
+      "c": "Penalty C",
+      "gamma": "Gamma γ",
+      "lr": "Learning rate"
+    },
+    "qlearning": {
+      "episodes": "Episodes",
+      "maxSteps": "Max steps per episode",
+      "alpha": "Learning rate α",
+      "gamma": "Discount γ",
+      "epsilonStart": "ε start",
+      "epsilonEnd": "ε end",
+      "epsilonDecay": "ε decay per episode"
+    },
+    "ml": {
+      "datasetHint": "2D synthetic data: 300 train / 200 val points; the boundary takes shape as training runs"
+    },
+    "boundary": {
+      "waiting": "Waiting for the first boundary snapshot…",
+      "noRun": "Start training to watch the decision boundary take shape",
+      "mode": {
+        "score": "Score field",
+        "label": "Label field"
+      },
+      "depth": "depth {{value}}",
+      "leaves": "leaves {{value}}",
+      "trees": "trees {{value}}",
+      "margin": "margin {{value}}",
+      "nSv": "support vectors {{value}}",
+      "split": {
+        "train": "Train",
+        "val": "Val"
+      },
+      "splitHint": "Switch the scatter's data split",
+      "class0": "Class 0",
+      "class1": "Class 1",
+      "svLegend": "Support vector",
+      "hint": "The color band's midpoint is the boundary, warmer favors class 1; the white band is where the margin is under 1"
+    },
+    "grid": {
+      "editorTitle": "Environment",
+      "brush": {
+        "obstacle": "Obstacle",
+        "start": "Start",
+        "goal": "Goal",
+        "reward": "Reward +1"
+      },
+      "noEnv": "This spec has no environment",
+      "envMeta": "obstacles {{obstacles}} · rewards {{rewards}}",
+      "hint": "Pick a brush, then click a cell: obstacles and rewards toggle off on a second click. Retrain to see the policy change",
+      "episode": "episode {{value}}",
+      "epsilon": "ε {{value}}",
+      "success": {
+        "yes": "reached the goal",
+        "no": "goal not reached"
+      },
+      "waiting": "Waiting for the first snapshot…",
+      "noRun": "Start training to see the value heatmap, policy arrows and trajectory",
+      "start": "Start",
+      "goal": "Goal",
+      "reward": "Reward"
+    }
   }
 }

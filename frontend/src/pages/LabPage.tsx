@@ -5,48 +5,24 @@ import { useTranslation } from "react-i18next";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import { fetchModelDetail } from "../api/graph";
+import type { ModelKind } from "../api/types";
 import { AppHeader } from "../components/AppHeader";
 import { ConnectionStatus } from "../components/ConnectionStatus";
 import { DeviceBadge } from "../components/DeviceBadge";
 import { LanguageSwitch } from "../components/LanguageSwitch";
-import { HiddenPanelsStrip, PanelLayoutProvider, usePanelLayoutState } from "../components/panelLayout";
-import type { PanelId, PanelLayoutApi } from "../components/panelLayout";
+import { PanelLayoutProvider, usePanelLayoutState } from "../components/panelLayout";
+import type { PanelLayoutApi } from "../components/panelLayout";
 import { Panel } from "../components/Panel";
-import { GraphEditor } from "../panels/GraphEditor/GraphEditor";
-import { IssuesPanel } from "../panels/GraphEditor/IssuesPanel";
-import { NodeDescriptions } from "../panels/GraphEditor/NodeDescriptions";
-import { NodePalette } from "../panels/GraphEditor/NodePalette";
 import { useGraphInfer } from "../panels/GraphEditor/useGraphInfer";
-import { MetricsCharts } from "../panels/MetricsCharts/MetricsCharts";
-import { ProbeViewer } from "../panels/ProbeViewer/ProbeViewer";
+import { COLUMN_KEYS, COLUMN_SIZE, HiddenPanelsStrip, PANEL_SIZE, panelRegistry } from "../panels/registry";
+import type { ColumnKey, PanelId } from "../panels/registry";
 import { RunControls } from "../panels/RunControls/RunControls";
-import { RunList } from "../panels/RunList/RunList";
-import { TrainingConfig } from "../panels/TrainingConfig/TrainingConfig";
 import { emptyGraph } from "../graph/ir";
 import type { GraphIR } from "../graph/ir";
 import { localizedText } from "../i18n/localized";
+import { isAlgoSpec, useAlgoStore } from "../stores/algoStore";
 import { useGraphStore } from "../stores/graphStore";
 import { useRunStore } from "../stores/runStore";
-
-type ColumnKey = "left" | "center" | "right";
-
-/** 三列的面板归属（与下方 JSX 的列结构、COLUMN_OF 保持一致）；整列收起与尺寸还原按此分组（docs/02 §9.2） */
-const COLUMN_PANES: Record<ColumnKey, PanelId[]> = {
-  left: ["nodes", "config"],
-  center: ["graph", "metrics", "probe"],
-  right: ["check", "nodeHelp", "runs"],
-};
-
-const COLUMN_OF: Record<PanelId, ColumnKey> = {
-  nodes: "left",
-  config: "left",
-  graph: "center",
-  metrics: "center",
-  probe: "center",
-  check: "right",
-  nodeHelp: "right",
-  runs: "right",
-};
 
 export default function LabPage() {
   const { t, i18n } = useTranslation();
@@ -64,15 +40,31 @@ export default function LabPage() {
   const replay = useRunStore((state) => state.replay);
   const replayLoading = useRunStore((state) => state.replayLoading);
   const selectRun = useRunStore((state) => state.selectRun);
+  // ML / RL 的 spec 不进 graphStore（docs/02 §13.6）：面板装配、标题、启动门禁都按它分派
+  const algoSpec = useAlgoStore((state) => state.spec);
+  const algoDirty = useAlgoStore((state) => state.dirty);
+  const algoFromRunId = useAlgoStore((state) => state.fromRunId);
+  const algoLoad = useAlgoStore((state) => state.loadSpec);
+  const algoClear = useAlgoStore((state) => state.clear);
+  const activeKind: ModelKind = algoSpec?.kind ?? "dl";
   const [searchParams, setSearchParams] = useSearchParams();
   const urlRunId = searchParams.get("run");
   const panelLayout = usePanelLayoutState();
   const isHidden = panelLayout.isHidden;
+
+  const panels = panelRegistry[activeKind];
+  const panelById = useMemo(() => new Map(panels.map((spec) => [spec.id, spec])), [panels]);
+  // 三列的面板归属由注册表推导：整列收起与尺寸还原按此分组（docs/02 §9.2）
+  const columnPanels = useMemo(() => {
+    const groups: Record<ColumnKey, PanelId[]> = { left: [], center: [], right: [] };
+    for (const spec of panels) groups[spec.column].push(spec.id);
+    return groups;
+  }, [panels]);
   // 一列的面板全部收起时，整列一起收起，把宽度让给相邻列（docs/02 §9.2）
   const columnHidden: Record<ColumnKey, boolean> = {
-    left: COLUMN_PANES.left.every(isHidden),
-    center: COLUMN_PANES.center.every(isHidden),
-    right: COLUMN_PANES.right.every(isHidden),
+    left: columnPanels.left.every(isHidden),
+    center: columnPanels.center.every(isHidden),
+    right: columnPanels.right.every(isHidden),
   };
   // 整列收起再恢复时 Allotment 的 cachedVisibleSize 已在级联中失真（逐个 setVisible(false)
   // 会把腾出的高度先分给仍可见的兄弟面板，恢复时按失真值撑开、溢出后被压回最小尺寸）。
@@ -90,12 +82,12 @@ export default function LabPage() {
     () => ({
       ...panelLayout,
       restore: (id) => {
-        const col = COLUMN_OF[id];
-        if (COLUMN_PANES[col].some(isHidden)) pendingResize.current.add(col);
+        const column = panelById.get(id)?.column;
+        if (column && columnPanels[column].some(isHidden)) pendingResize.current.add(column);
         panelLayout.restore(id);
       },
     }),
-    [panelLayout, isHidden],
+    [panelLayout, isHidden, panelById, columnPanels],
   );
 
   useLayoutEffect(() => {
@@ -106,8 +98,8 @@ export default function LabPage() {
         pendingResize.current.delete(col);
         continue;
       }
-      columnRefs.current[col]?.resize(COLUMN_PANES[col].map((id, i) => (isHidden(id) ? 0 : pristine[i])));
-      if (COLUMN_PANES[col].every((id) => !isHidden(id))) pendingResize.current.delete(col);
+      columnRefs.current[col]?.resize(columnPanels[col].map((id, i) => (isHidden(id) ? 0 : pristine[i])));
+      if (columnPanels[col].every((id) => !isHidden(id))) pendingResize.current.delete(col);
     }
   });
 
@@ -162,7 +154,7 @@ export default function LabPage() {
     setSearchParams(next, { replace: true });
   }, [urlRunId, replay, replayLoading, searchParams, setSearchParams]);
 
-  const replayGraph = (replay?.graph ?? null) as GraphIR | null;
+  const replayGraph = replay?.graph ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -174,10 +166,19 @@ export default function LabPage() {
         cancelled = true;
       };
     }
-    const graph = (state.replay?.graph ?? null) as GraphIR | null;
+    const graph = state.replay?.graph ?? null;
     if (graph) {
-      // 回放：图结构从 run 详情的 graph_json 恢复，只读（禁编辑 / 禁右键建节点 / 不显示克隆）
-      load(graph, { readOnly: true, source: "replay" });
+      // 回放：结构从 run 详情的 graph_json 恢复，只读；ML / RL 的 spec 进 algoStore（docs/02 §13.6）
+      if (isAlgoSpec(graph)) {
+        algoLoad(graph, { modelId: null, fromRunId: state.replay?.id ?? null });
+        setLoadError(null);
+        setStatus("ready");
+        return () => {
+          cancelled = true;
+        };
+      }
+      algoClear();
+      load(graph as GraphIR, { readOnly: true, source: "replay" });
       setLoadError(null);
       setStatus("ready");
       return () => {
@@ -187,6 +188,7 @@ export default function LabPage() {
     setStatus("loading");
     setLoadError(null);
     if (graphId === "new") {
+      algoClear();
       const graph = emptyGraph();
       load(graph, { readOnly: false, source: "new" });
       applyConfigDefaults(graph.hyper_defaults);
@@ -199,9 +201,20 @@ export default function LabPage() {
     fetchModelDetail(graphId)
       .then((detail) => {
         if (cancelled) return;
-        load(detail.graph, { readOnly: detail.source === "preset", source: detail.source === "preset" ? "preset" : "user" });
-        applyConfigDefaults(detail.graph.hyper_defaults);
-        applyProbeDefaults(detail.graph);
+        if (isAlgoSpec(detail.graph)) {
+          // ML / RL 模型：表单初值即预置；未改参数时提交 model_id，改过则内联 spec
+          algoLoad(detail.graph, { modelId: graphId, fromRunId: null });
+          setLoadError(null);
+          setStatus("ready");
+          return;
+        }
+        algoClear();
+        load(detail.graph as GraphIR, {
+          readOnly: detail.source === "preset",
+          source: detail.source === "preset" ? "preset" : "user",
+        });
+        applyConfigDefaults((detail.graph as GraphIR).hyper_defaults);
+        applyProbeDefaults(detail.graph as GraphIR);
         const hinted = (detail.graph as { dataset_id?: unknown }).dataset_id;
         if (typeof hinted === "string" && hinted) setDataset(hinted);
         setStatus("ready");
@@ -214,18 +227,35 @@ export default function LabPage() {
     return () => {
       cancelled = true;
     };
-  }, [graphId, replayGraph, replayLoading, load, applyConfigDefaults, applyProbeDefaults, setDataset]);
+  }, [
+    graphId,
+    replayGraph,
+    replayLoading,
+    load,
+    applyConfigDefaults,
+    applyProbeDefaults,
+    setDataset,
+    algoLoad,
+    algoClear,
+  ]);
 
-  useGraphInfer(status === "ready");
+  useGraphInfer(status === "ready" && activeKind === "dl");
 
   const title = useMemo(() => {
-    const localized = localizedText(meta.name, i18n.language);
-    return localized || t("lab.untitled");
-  }, [meta.name, i18n.language, t]);
+    const name = activeKind === "dl" ? meta.name : algoSpec?.name;
+    return localizedText(name, i18n.language) || t("lab.untitled");
+  }, [activeKind, meta.name, algoSpec?.name, i18n.language, t]);
 
   const clone = useCallback(() => {
     cloneAsCopy();
   }, [cloneAsCopy]);
+
+  const locked = readOnly || algoFromRunId !== null;
+  const replayMode = source === "replay" || algoFromRunId !== null;
+  const replayId = replay?.id ?? algoFromRunId ?? "";
+  // DL 的 dirty 是「未保存到磁盘」，ML / RL 没有保存动作：改动只作用于下一次训练
+  const dlDirty = dirty && !readOnly && activeKind === "dl";
+  const algoChanges = algoDirty && algoFromRunId === null;
 
   return (
     <div className="app-shell">
@@ -236,14 +266,12 @@ export default function LabPage() {
               {t("nav.backToLibrary")}
             </Link>
             <span className="app-header__title">{title}</span>
-            {readOnly ? (
+            {locked ? (
               <span className="badge badge--muted">
-                {source === "replay"
-                  ? t("lab.replayMode", { run: replay?.id ?? "" })
-                  : t("lab.readOnly")}
+                {replayMode ? t("lab.replayMode", { run: replayId }) : t("lab.readOnly")}
               </span>
             ) : null}
-            {source === "replay" ? (
+            {replayMode ? (
               <button
                 type="button"
                 className="btn btn--ghost lab-replay-exit"
@@ -253,12 +281,13 @@ export default function LabPage() {
                 {t("lab.exitReplay")}
               </button>
             ) : null}
-            {dirty && !readOnly ? <span className="badge badge--warn">{t("lab.unsaved")}</span> : null}
+            {dlDirty ? <span className="badge badge--warn">{t("lab.unsaved")}</span> : null}
+            {algoChanges ? <span className="badge badge--warn">{t("lab.algoDirty")}</span> : null}
           </>
         }
         actions={
           <>
-            {readOnly && source !== "replay" ? (
+            {readOnly && source !== "replay" && activeKind === "dl" ? (
               <button type="button" className="btn btn--primary" onClick={clone}>
                 {t("lab.cloneAsCopy")}
               </button>
@@ -286,59 +315,35 @@ export default function LabPage() {
             <div className="lab-loading">{t("common.loading")}</div>
           ) : (
             <ReactFlowProvider>
-              <Allotment>
-                <Allotment.Pane minSize={240} preferredSize="20%" visible={!columnHidden.left}>
-                  <Allotment vertical {...columnBind("left")}>
-                    <Allotment.Pane minSize={160} visible={!isHidden("nodes")}>
-                      <Panel id="nodes" title={t("lab.zones.nodes")}>
-                        <NodePalette />
-                      </Panel>
-                    </Allotment.Pane>
-                    <Allotment.Pane minSize={240} visible={!isHidden("config")}>
-                      <Panel id="config" title={t("lab.zones.config")}>
-                        <TrainingConfig />
-                      </Panel>
-                    </Allotment.Pane>
-                  </Allotment>
-                </Allotment.Pane>
-                <Allotment.Pane minSize={460} visible={!columnHidden.center}>
-                  <Allotment vertical {...columnBind("center")}>
-                    <Allotment.Pane minSize={200} preferredSize="46%" visible={!isHidden("graph")}>
-                      <Panel id="graph" title={t("lab.zones.graph")}>
-                        <GraphEditor />
-                      </Panel>
-                    </Allotment.Pane>
-                    <Allotment.Pane minSize={150} preferredSize="26%" visible={!isHidden("metrics")}>
-                      <Panel id="metrics" title={t("lab.zones.metrics")}>
-                        <MetricsCharts />
-                      </Panel>
-                    </Allotment.Pane>
-                    <Allotment.Pane minSize={150} visible={!isHidden("probe")}>
-                      <Panel id="probe" title={t("lab.zones.probe")}>
-                        <ProbeViewer />
-                      </Panel>
-                    </Allotment.Pane>
-                  </Allotment>
-                </Allotment.Pane>
-                <Allotment.Pane minSize={300} preferredSize="26%" visible={!columnHidden.right}>
-                  <Allotment vertical {...columnBind("right")}>
-                    <Allotment.Pane minSize={120} preferredSize="30%" visible={!isHidden("check")}>
-                      <Panel id="check" title={t("lab.zones.check")}>
-                        <IssuesPanel />
-                      </Panel>
-                    </Allotment.Pane>
-                    <Allotment.Pane minSize={140} preferredSize="34%" visible={!isHidden("nodeHelp")}>
-                      <Panel id="nodeHelp" title={t("lab.zones.nodeHelp")}>
-                        <NodeDescriptions />
-                      </Panel>
-                    </Allotment.Pane>
-                    <Allotment.Pane minSize={140} visible={!isHidden("runs")}>
-                      <Panel id="runs" title={t("lab.zones.runs")}>
-                        <RunList />
-                      </Panel>
-                    </Allotment.Pane>
-                  </Allotment>
-                </Allotment.Pane>
+              <Allotment key={activeKind}>
+                {COLUMN_KEYS.map((col) => (
+                  <Allotment.Pane
+                    key={col}
+                    minSize={COLUMN_SIZE[activeKind][col].minSize}
+                    preferredSize={COLUMN_SIZE[activeKind][col].preferredSize}
+                    visible={!columnHidden[col]}
+                  >
+                    <Allotment vertical {...columnBind(col)}>
+                      {columnPanels[col].map((id) => {
+                        const spec = panelById.get(id);
+                        if (!spec) return null;
+                        const Body = spec.component;
+                        return (
+                          <Allotment.Pane
+                            key={id}
+                            minSize={PANEL_SIZE[id].minSize}
+                            preferredSize={PANEL_SIZE[id].preferredSize}
+                            visible={!isHidden(id)}
+                          >
+                            <Panel id={id} title={t(spec.titleKey)}>
+                              <Body />
+                            </Panel>
+                          </Allotment.Pane>
+                        );
+                      })}
+                    </Allotment>
+                  </Allotment.Pane>
+                ))}
               </Allotment>
             </ReactFlowProvider>
           )}

@@ -1786,3 +1786,261 @@ body {
   border-radius: var(--radius-sm);
   pointer-events: none;
 }
+
+/* ---------------------------------------------------------------- ML / RL（docs/02 §13.6） */
+
+/* 算法参数表单：数字输入 + 滑杆（与图编辑器的 .param-field 行内字段区分开） */
+.param-form {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.algo-param {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.algo-param__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.algo-param__label {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.algo-param__value {
+  width: 78px;
+  flex: none;
+  padding: 2px 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  text-align: right;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.algo-param__value:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.algo-param__value:disabled {
+  color: var(--faint);
+}
+
+.algo-param__slider {
+  width: 100%;
+  height: 12px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+/* 决策边界 / 网格世界画布 */
+.algo-canvas {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  min-height: 0;
+}
+
+.algo-canvas__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  flex-wrap: wrap;
+}
+
+.algo-canvas__spacer {
+  flex: 1;
+}
+
+.algo-canvas__stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.algo-canvas__bitmap {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.algo-canvas__empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 18px;
+  font-size: 12px;
+  color: var(--faint);
+  text-align: center;
+  pointer-events: none;
+}
+
+.algo-canvas__legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.algo-canvas__hint {
+  flex: 1;
+  min-width: 120px;
+  color: var(--faint);
+}
+
+.algo-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.algo-legend__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.algo-legend__ring {
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--text);
+  border-radius: 50%;
+}
+
+.algo-legend__diamond {
+  width: 9px;
+  height: 9px;
+  background: #ffd666;
+  transform: rotate(45deg);
+}
+
+/* 环境网格编辑器：四支画笔 + 尺寸自适应格子 */
+.grid-editor__brushes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 7px;
+}
+
+.grid-editor__brush {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.grid-editor__brush:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.grid-editor__brush--active {
+  color: var(--text);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.grid-editor__brush:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.grid-editor__swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--border-strong);
+}
+
+.grid-editor__swatch--obstacle {
+  background: #262c34;
+}
+
+.grid-editor__swatch--start {
+  background: #39b54a;
+  border-radius: 50%;
+}
+
+.grid-editor__swatch--goal {
+  background: #ffd666;
+  transform: rotate(45deg);
+}
+
+.grid-editor__swatch--reward {
+  background: transparent;
+  border: 2px solid #f5a524;
+  border-radius: 50%;
+}
+
+.grid-editor {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+
+.grid-cell {
+  aspect-ratio: 1 / 1;
+  min-width: 0;
+  padding: 0;
+  background: rgba(147, 161, 177, 0.12);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.grid-cell:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.grid-cell:disabled {
+  cursor: default;
+}
+
+.grid-cell--obstacle {
+  background: #262c34;
+}
+
+.grid-cell--start {
+  background: #39b54a;
+}
+
+.grid-cell--goal {
+  background: #ffd666;
+}
+
+.grid-cell--reward {
+  background: rgba(245, 165, 36, 0.22);
+  border-color: #f5a524;
+}

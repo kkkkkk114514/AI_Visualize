@@ -47,7 +47,20 @@ export type MetricName =
   | "lr"
   | "grad_norm"
   | "throughput"
-  | "vram_mb";
+  | "vram_mb"
+  // ML / RL 算法指标（docs/02 §5.4）
+  | "margin"
+  | "n_sv"
+  | "depth"
+  | "leaves"
+  | "n_nodes"
+  | "n_trees"
+  | "reward"
+  | "q_delta"
+  | "episode_reward"
+  | "epsilon"
+  | "episode_steps"
+  | "success";
 
 export type RunControlAction =
   | "pause"
@@ -68,7 +81,8 @@ export interface RunHyperparams {
   val_size?: number;
 }
 
-export type ProbeKind = "feature_grid" | "attention" | "hidden" | "histogram" | "weights";
+/** 探针类型：DL 五类 + ML / RL 的单流类型（docs/02 §6.1 / §13.4）。 */
+export type ProbeKind = "feature_grid" | "attention" | "hidden" | "histogram" | "weights" | "boundary" | "grid";
 
 /** 探针条目（docs/02 §6.1）：随 run 启动提交，训练中不变。 */
 export interface ProbeSpec {
@@ -94,6 +108,31 @@ export interface SnapshotMeta {
 }
 
 /** 快照 payload 容器（docs/02 §6.2）：uint8 需按 min/max 反量化，uint32 为原始计数。 */
+export interface SnapshotMetaInfo {
+  heads?: number;
+  tokens?: number;
+  causal?: boolean;
+  bins?: number;
+  /** `boundary`（docs/02 §13.5）：score 为实值决策函数 / label 为类别下标 */
+  mode?: "score" | "label";
+  x_range?: [number, number];
+  y_range?: [number, number];
+  algo?: string;
+  depth?: number;
+  leaves?: number;
+  nodes?: number;
+  n_trees?: number;
+  margin?: number;
+  n_sv?: number;
+  support_vectors?: [number, number][];
+  /** `grid`（docs/02 §13.5）：策略动作下标（-1 = 障碍或终点）与最近一个已完成 episode */
+  policy?: number[];
+  trajectory?: [number, number][];
+  episode?: number;
+  epsilon?: number;
+  success?: boolean;
+}
+
 export interface SnapshotPayload {
   shape: number[];
   dtype: string;
@@ -101,7 +140,7 @@ export interface SnapshotPayload {
   min: number;
   max: number;
   data_b64: string;
-  meta?: { heads?: number; tokens?: number; causal?: boolean; bins?: number };
+  meta?: SnapshotMetaInfo;
 }
 
 export interface SnapshotsResponse {
@@ -190,6 +229,61 @@ export interface DatasetInfo {
 
 export interface DatasetsResponse {
   datasets: DatasetInfo[];
+}
+
+/** `GET /api/datasets/{id}/points`（docs/02 §13.3）：ML 决策边界画布的散点底图。 */
+export interface PointsResponse {
+  split: string;
+  points: [number, number][];
+  labels: number[];
+  count: number;
+}
+
+/** 算法参数 schema 字段（docs/02 §13.2）：`GET /api/algos` 与服务端校验共用同一份表。 */
+export interface AlgoField {
+  name: string;
+  type: "int" | "float" | "choice";
+  min?: number | null;
+  max?: number | null;
+  step?: number | null;
+  choices?: string[];
+  default: number | string;
+  label_key: string;
+}
+
+export interface AlgoSchema {
+  algo: string;
+  kind: "ml" | "rl";
+  fields: AlgoField[];
+}
+
+export interface AlgosResponse {
+  algos: Record<string, AlgoSchema>;
+}
+
+/** GridWorld 环境（docs/02 §13.3）：`spec.env`。 */
+export interface GridEnv {
+  width: number;
+  height: number;
+  start: [number, number];
+  goal: [number, number];
+  obstacles: [number, number][];
+  rewards: [number, number, number][];
+}
+
+/** ML / RL 的模型定义（docs/02 §13.1）：与 DL 图 IR 共用 `graph` 字段，按 `kind` 区分。 */
+export interface AlgoSpec {
+  ir_version?: number;
+  id: string;
+  kind: "ml" | "rl";
+  task?: string;
+  name?: LocalizedText;
+  desc?: LocalizedText;
+  algo: string;
+  params: Record<string, number | string>;
+  env?: GridEnv;
+  probe_defaults?: { every_n_steps?: number };
+  dataset_id?: string;
 }
 
 export interface ApiErrorPayload {

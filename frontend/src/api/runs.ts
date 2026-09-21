@@ -14,7 +14,8 @@ import type {
 export interface StartRunBody {
   graph?: unknown;
   model_id?: string;
-  dataset_id: string;
+  /** ML / RL 省略（数据集由 spec / 预置给出，docs/02 §13.4） */
+  dataset_id?: string;
   hyperparams?: RunHyperparams;
   probes?: ProbeSpec[];
   seed?: number;

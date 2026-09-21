@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { usePanelLayout } from "./panelLayout";
-import type { PanelId } from "./panelLayout";
+import type { PanelId } from "../panels/registry";
 
 interface PanelProps {
   /** 传 id 才显示「收起」按钮（见 docs/02 §9.2「面板收起」） */

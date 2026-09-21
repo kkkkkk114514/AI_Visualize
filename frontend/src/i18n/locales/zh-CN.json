@@ -49,13 +49,16 @@
       "check": "检查与提示",
       "nodeHelp": "节点说明",
       "runs": "历史 run",
-      "probe": "探针"
+      "probe": "探针",
+      "boundary": "决策边界",
+      "grid": "网格世界"
     },
     "empty": {
       "config": "暂无可配置项",
       "main": "暂无内容",
       "metrics": "暂无数据"
-    }
+    },
+    "algoDirty": "参数已修改，仅作用于下次训练"
   },
   "run": {
     "controls": {
@@ -174,7 +177,24 @@
       "metric": {
         "lr": "学习率",
         "grad_norm": "梯度范数",
-        "throughput": "吞吐"
+        "throughput": "吞吐",
+        "loss": "损失",
+        "acc": "准确率",
+        "val_loss": "验证损失",
+        "val_acc": "验证准确率",
+        "vram_mb": "显存",
+        "margin": "间隔",
+        "n_sv": "支持向量数",
+        "depth": "深度",
+        "leaves": "叶子数",
+        "n_nodes": "节点数",
+        "n_trees": "树数",
+        "reward": "逐步奖励",
+        "q_delta": "Q 变化量",
+        "episode_reward": "回合回报",
+        "epsilon": "ε（探索率）",
+        "episode_steps": "回合步数",
+        "success": "成功"
       }
     },
     "list": {
@@ -367,7 +387,10 @@
     "dataset": {
       "notFound": "数据集不存在：{{id}}",
       "notCached": "数据集未缓存：请先下载或把官方文件放到 {{path}}",
-      "downloading": "数据集正在下载中"
+      "downloading": "数据集正在下载中",
+      "noPoints": "该数据集没有二维点集：{{id}}",
+      "badSplit": "未知的数据划分：{{split}}（可选 {{choices}}）",
+      "kindMismatch": "数据集 {{id}} 与模型类别 {{kind}} 不匹配：该类别需要 {{expected}}"
     },
     "run": {
       "unknown": "未知错误",
@@ -394,10 +417,17 @@
       "unknownNode": "探针目标节点不存在：{{node_id}}",
       "badKind": "探针类型非法：{{kind}}（节点 {{node_id}}）",
       "badValue": "探针参数非法：{{param}}",
-      "kindMismatch": "张量形状与探针类型 {{kind}} 不匹配：{{shape}}"
+      "kindMismatch": "张量形状与探针类型 {{kind}} 不匹配：{{shape}}",
+      "badStream": "该模型只接受单流探针：{{expected}}"
     },
     "snapshot": {
       "notFound": "快照不存在：{{id}}"
+    },
+    "algo": {
+      "badValue": "参数 {{param}} 取值非法（类型不符 / 越界 / 不在可选项内）",
+      "badSpec": "模型定义非法：{{param}}",
+      "badEnv": "环境参数 {{param}} 非法（越界，或起终点 / 障碍 / 奖励之间有冲突）",
+      "unknownAlgo": "未知算法 {{algo}}，或它不属于 {{kind}}"
     }
   },
   "log": {
@@ -410,7 +440,9 @@
       "finished": "训练完成：{{epochs}} 轮，用时 {{elapsed_s}}s",
       "lrApplied": "学习率将在下一个 step 生效：{{lr}}",
       "batchApplied": "批大小将在下一个 epoch 生效：{{batch_size}}",
-      "textCorpus": "字符级语料：词表 {{vocab_size}} · 序列长度 {{seq_len}}"
+      "textCorpus": "字符级语料：词表 {{vocab_size}} · 序列长度 {{seq_len}}",
+      "env": "环境就绪：{{width}}×{{height}}，障碍 {{obstacles}} · 奖励 {{rewards}}",
+      "batchIgnored": "该算法是逐步更新：忽略批大小设置"
     },
     "probe": {
       "attached": "已挂 {{n}} 条探针流",
@@ -420,5 +452,98 @@
   },
   "common": {
     "loading": "加载中…"
+  },
+  "algo": {
+    "params": {
+      "title": "算法参数"
+    },
+    "classes": "类",
+    "probeNote": "快照间隔：每 {{n}} 个 step 采样一次",
+    "choice": {
+      "linear": "线性核",
+      "rbf": "RBF 核"
+    },
+    "common": {
+      "lr": "学习率",
+      "epochs": "迭代轮数",
+      "batchSize": "批大小",
+      "l2": "L2 正则",
+      "renderDelay": "展示节拍（ms）",
+      "everyN": "采样间隔"
+    },
+    "tree": {
+      "maxDepth": "最大深度",
+      "minSamplesLeaf": "叶子最小样本数",
+      "maxNodes": "节点上限"
+    },
+    "forest": {
+      "nEstimators": "树的数量",
+      "maxDepth": "最大深度",
+      "minSamplesLeaf": "叶子最小样本数",
+      "featureFraction": "特征采样比例"
+    },
+    "svm": {
+      "kernel": "核函数",
+      "c": "惩罚系数 C",
+      "gamma": "核宽 γ",
+      "lr": "学习率"
+    },
+    "qlearning": {
+      "episodes": "训练回合数",
+      "maxSteps": "回合步数上限",
+      "alpha": "学习率 α",
+      "gamma": "折扣 γ",
+      "epsilonStart": "ε 初始值",
+      "epsilonEnd": "ε 终值",
+      "epsilonDecay": "ε 每回合衰减"
+    },
+    "ml": {
+      "datasetHint": "二维合成数据：训练 300 / 验证 200 个点，决策边界随迭代逐步成形"
+    },
+    "boundary": {
+      "waiting": "等待首个决策边界快照…",
+      "noRun": "开始训练后，这里显示决策边界随迭代成形",
+      "mode": {
+        "score": "实值场",
+        "label": "标签场"
+      },
+      "depth": "深度 {{value}}",
+      "leaves": "叶子 {{value}}",
+      "trees": "树 {{value}}",
+      "margin": "间隔 {{value}}",
+      "nSv": "支持向量 {{value}}",
+      "split": {
+        "train": "训练集",
+        "val": "验证集"
+      },
+      "splitHint": "切换散点显示的数据划分",
+      "class0": "类别 0",
+      "class1": "类别 1",
+      "svLegend": "支持向量",
+      "hint": "色带中点是决策边界，越暖越偏向类别 1；白色带是间隔不足 1 的区域"
+    },
+    "grid": {
+      "editorTitle": "环境",
+      "brush": {
+        "obstacle": "障碍",
+        "start": "起点",
+        "goal": "终点",
+        "reward": "奖励 +1"
+      },
+      "noEnv": "该 spec 没有环境定义",
+      "envMeta": "障碍 {{obstacles}} · 奖励 {{rewards}}",
+      "hint": "先选画笔再点格子：障碍与奖励再点一次取消；改完直接重训，策略箭头随之变化",
+      "episode": "回合 {{value}}",
+      "epsilon": "ε {{value}}",
+      "success": {
+        "yes": "已抵达终点",
+        "no": "未抵达终点"
+      },
+      "waiting": "等待首个快照…",
+      "noRun": "开始训练后，这里显示价值热力、策略箭头与轨迹",
+      "start": "起点",
+      "goal": "终点",
+      "reward": "奖励格"
+    }
   }
 }

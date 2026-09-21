@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
+import { useAlgoStore } from "../../stores/algoStore";
 import { useGraphStore } from "../../stores/graphStore";
 import { isActiveStatus, useRunStore } from "../../stores/runStore";
 
@@ -39,12 +40,30 @@ export function RunControls() {
   const localIssues = useGraphStore((state) => state.localIssues);
   const modelId = useGraphStore((state) => state.meta.id);
 
+  // ML / RL 的 spec 不进 graphStore（docs/02 §13.6）：启动源与数据集都改看 algoStore
+  const algoSpec = useAlgoStore((state) => state.spec);
+  const activeKind = algoSpec?.kind ?? "dl";
+
   const replay = useRunStore((state) => state.replay);
   const replaying = replay !== null;
 
   const running = isActiveStatus(status);
-  const blocked = localIssues.some((issue) => issue.severity === "error") || inferErrors.length > 0;
-  const dataset = datasets?.find((item) => item.id === datasetId) ?? null;
+  const blocked =
+    activeKind === "dl" && (localIssues.some((issue) => issue.severity === "error") || inferErrors.length > 0);
+  const effectiveDatasetId = algoSpec?.dataset_id ?? datasetId;
+  const dataset = datasets?.find((item) => item.id === effectiveDatasetId) ?? null;
+
+  const handleStart = () => {
+    if (activeKind === "dl") {
+      void start({
+        kind: "dl",
+        graph: useGraphStore.getState().toGraphIR(),
+        modelId: graphSource === "preset" ? modelId : undefined,
+      });
+      return;
+    }
+    void start({ kind: "algo", ...useAlgoStore.getState().runSource() });
+  };
 
   useEffect(() => {
     if (!running) return;
@@ -68,13 +87,13 @@ export function RunControls() {
           type="button"
           className="btn btn--primary"
           disabled={running || starting || blocked || replaying}
-          onClick={() => void start(useGraphStore.getState().toGraphIR(), graphSource === "preset" ? modelId : undefined)}
+          onClick={handleStart}
           title={
             replaying
               ? t("run.replayNote", { run: replay.id })
               : blocked
                 ? t("run.blockedHint")
-                : readOnly
+                : activeKind === "dl" && readOnly
                   ? t("run.presetHint")
                   : undefined
           }
@@ -123,7 +142,7 @@ export function RunControls() {
             <span className="run-bar__metric-label">{t("run.metrics.best")}</span>
             <strong>{bestMetric === null ? "—" : bestMetric.toFixed(4)}</strong>
           </span>
-          <span className="badge badge--muted">{device ?? dataset?.id ?? "—"}</span>
+          <span className="badge badge--muted">{device ?? effectiveDatasetId ?? "—"}</span>
         </span>
       ) : null}
 
@@ -137,7 +156,7 @@ export function RunControls() {
         <span className="run-bar__note">{t("run.replayNote", { run: replay.id })}</span>
       ) : blocked ? (
         <span className="run-bar__note">{t("run.blockedHint")}</span>
-      ) : readOnly ? (
+      ) : activeKind === "dl" && readOnly ? (
         <span className="run-bar__note">{t("run.presetHint")}</span>
       ) : (
         <span className="run-bar__note">

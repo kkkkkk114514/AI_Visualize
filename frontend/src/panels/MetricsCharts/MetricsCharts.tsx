@@ -1,25 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import uPlot from "uplot";
 
 import "uplot/dist/uPlot.min.css";
 
 import type { MetricName } from "../../api/types";
-import { METRIC_NAMES, useRunStore, metricsBuffer } from "../../stores/runStore";
-
-const COLORS: Record<MetricName, string> = {
-  loss: "#4c9aff",
-  acc: "#3fb950",
-  val_loss: "#8ab4f8",
-  val_acc: "#7ee787",
-  lr: "#d29922",
-  grad_norm: "#bc8cff",
-  throughput: "#39c5cf",
-  vram_mb: "#f85149",
-};
-
-const MAIN_SERIES: MetricName[] = ["loss", "val_loss", "acc", "val_acc"];
-const OPTIONAL_METRICS: MetricName[] = ["lr", "grad_norm", "throughput"];
+import { useAlgoStore } from "../../stores/algoStore";
+import { useRunStore, metricsBuffer } from "../../stores/runStore";
+import { COLORS, metricGroups } from "./groups";
+import type { MetricGroup, SeriesSpec } from "./groups";
 
 function axisStyle(): uPlot.Axis {
   return {
@@ -181,65 +170,57 @@ function epochMarkersPlugin(valColumn: number): uPlot.Plugin {
   };
 }
 
-function buildMainOptions(container: HTMLElement, stepLabel: string, cursorRef: CursorRef): uPlot.Options {
-  const names = MAIN_SERIES;
-  const valColumn = names.indexOf("val_loss") + 1;
+/** 曲线样式：`val_*` 走虚线 + 端点，其余实线（与训练曲线惯例一致）。 */
+function seriesStyle(spec: SeriesSpec, group: MetricGroup, label: string): uPlot.Series {
+  const dashed = spec.name.startsWith("val_");
+  return {
+    label,
+    stroke: COLORS[spec.name],
+    width: dashed ? 1.4 : 1.8,
+    dash: dashed ? [5, 4] : undefined,
+    spanGaps: dashed,
+    points: { show: dashed, size: dashed ? 5 : undefined },
+    scale: spec.axis === "right" ? group.right?.scale : undefined,
+    value: seriesValue,
+  };
+}
+
+function buildMainOptions(
+  group: MetricGroup,
+  labels: (name: MetricName) => string,
+  container: HTMLElement,
+  stepLabel: string,
+  cursorRef: CursorRef,
+): uPlot.Options {
+  const right = group.right;
+  const scales: uPlot.Scales = { x: { time: false }, y: { auto: true } };
+  const axes: uPlot.Axis[] = [
+    { ...axisStyle(), size: 30 },
+    { ...axisStyle(), size: 48 },
+  ];
+  if (right) {
+    scales[right.scale] = right.range ? { range: right.range } : { auto: true };
+    axes.push({ ...axisStyle(), scale: right.scale, side: 1, size: right.size });
+  }
+  const valIndex = group.main.findIndex((item) => item.name.startsWith("val_"));
+  const plugins: uPlot.Plugin[] = [liveLegendPlugin(cursorRef), timeCursorPlugin(cursorRef)];
+  if (valIndex >= 0) plugins.push(epochMarkersPlugin(valIndex + 1));
   return {
     ...baseOptions(),
     width: container.clientWidth || 320,
     series: [
       { label: stepLabel, value: seriesValue },
-      {
-        label: names[0],
-        stroke: COLORS.loss,
-        width: 1.8,
-        points: { show: false },
-        value: seriesValue,
-      },
-      {
-        label: names[1],
-        stroke: COLORS.val_loss,
-        width: 1.4,
-        dash: [5, 4],
-        spanGaps: true,
-        points: { show: true, size: 5 },
-        value: seriesValue,
-      },
-      {
-        label: names[2],
-        stroke: COLORS.acc,
-        width: 1.6,
-        scale: "acc",
-        points: { show: false },
-        value: seriesValue,
-      },
-      {
-        label: names[3],
-        stroke: COLORS.val_acc,
-        width: 1.4,
-        dash: [5, 4],
-        spanGaps: true,
-        scale: "acc",
-        points: { show: true, size: 5 },
-        value: seriesValue,
-      },
+      ...group.main.map((item) => seriesStyle(item, group, labels(item.name))),
     ],
-    scales: {
-      x: { time: false },
-      y: { auto: true },
-      acc: { auto: true },
-    },
-    axes: [
-      { ...axisStyle(), size: 30 },
-      { ...axisStyle(), size: 48 },
-      { ...axisStyle(), scale: "acc", side: 1, size: 40 },
-    ],
-    plugins: [liveLegendPlugin(cursorRef), timeCursorPlugin(cursorRef), epochMarkersPlugin(valColumn)],
+    scales,
+    axes,
+    plugins,
   };
 }
 
 function buildExtraOptions(
   name: MetricName,
+  label: string,
   container: HTMLElement,
   stepLabel: string,
   cursorRef: CursorRef,
@@ -250,16 +231,25 @@ function buildExtraOptions(
     height: 96,
     series: [
       { label: stepLabel, value: seriesValue },
-      { label: name, stroke: COLORS[name], width: 1.6, points: { show: false }, value: seriesValue },
+      { label, stroke: COLORS[name], width: 1.6, points: { show: false }, value: seriesValue },
     ],
     plugins: [liveLegendPlugin(cursorRef), timeCursorPlugin(cursorRef)],
   };
 }
 
 export function MetricsCharts() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const stepLabel = t("run.metrics.step");
   const legendHint = t("run.chart.legendToggle");
+  // 曲线分组按当前模型类别（DL / ML / RL）与算法决定（docs/02 §13.6）
+  const algoSpec = useAlgoStore((state) => state.spec);
+  const kind = algoSpec?.kind ?? "dl";
+  const group = useMemo(() => metricGroups(kind, algoSpec?.algo ?? null), [kind, algoSpec?.algo]);
+  const labelOf = useCallback(
+    (name: MetricName) => t(`run.chart.metric.${name}`),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [t, i18n.language],
+  );
   // 数据源标注看 metricsRunId（缓冲当前承载的 run）：已挂 run A + 回看 run B 时标 B
   const chartRunId = useRunStore((state) => state.metricsRunId);
   const chartName = useRunStore((state) => {
@@ -270,9 +260,14 @@ export function MetricsCharts() {
   });
   const cursorStep = useRunStore((state) => state.cursorStep);
   const setCursorStep = useRunStore((state) => state.setCursorStep);
-  const [optional, setOptional] = useState<MetricName[]>(["lr"]);
+  const [optional, setOptional] = useState<MetricName[]>([]);
   const [empty, setEmpty] = useState(true);
   const [range, setRange] = useState<{ min: number; max: number }>({ min: 0, max: 0 });
+
+  // 换模型类别 / 算法：附加指标的默认勾选跟着分组重置
+  useEffect(() => {
+    setOptional(group.optional.slice(0, group.optionalDefault));
+  }, [group]);
 
   const cursorRef = useRef<number | null>(cursorStep);
   const mainHost = useRef<HTMLDivElement | null>(null);
@@ -290,16 +285,17 @@ export function MetricsCharts() {
   useEffect(() => {
     const host = mainHost.current;
     if (!host) return;
+    const names = group.main.map((item) => item.name);
     const plot = new uPlot(
-      buildMainOptions(host, stepLabel, cursorRef),
-      metricsBuffer.alignedData(MAIN_SERIES),
+      buildMainOptions(group, labelOf, host, stepLabel, cursorRef),
+      metricsBuffer.alignedData(names),
       host,
     );
     markLegendToggles(plot, legendHint);
     mainPlot.current = plot;
     const detachPin = enableClickToPin(plot, setCursorStep);
     const off = metricsBuffer.subscribe(() => {
-      plot.setData(metricsBuffer.alignedData(MAIN_SERIES));
+      plot.setData(metricsBuffer.alignedData(names));
     });
     const onResize = () => {
       if (host.clientWidth > 0) plot.setSize({ width: host.clientWidth, height: host.clientHeight - 4 });
@@ -314,7 +310,7 @@ export function MetricsCharts() {
       plot.destroy();
       mainPlot.current = null;
     };
-  }, [legendHint, stepLabel, setCursorStep]);
+  }, [group, labelOf, legendHint, stepLabel, setCursorStep]);
 
   useEffect(() => {
     const created: uPlot[] = [];
@@ -328,7 +324,7 @@ export function MetricsCharts() {
       const host = extraHosts.current.get(name);
       if (!host || extraPlots.current.has(name)) continue;
       const plot = new uPlot(
-        buildExtraOptions(name, host, stepLabel, cursorRef),
+        buildExtraOptions(name, labelOf(name), host, stepLabel, cursorRef),
         metricsBuffer.alignedData([name]),
         host,
       );
@@ -367,7 +363,7 @@ export function MetricsCharts() {
         if (created.includes(plot)) extraPlots.current.delete(name);
       }
     };
-  }, [optional, stepLabel, setCursorStep]);
+  }, [optional, labelOf, stepLabel, setCursorStep]);
 
   // 缓冲区变化：同步「是否为空」与时间轴范围（range 不变时不触发渲染）
   useEffect(() => {
@@ -386,12 +382,12 @@ export function MetricsCharts() {
 
   const toggles = useMemo(
     () =>
-      OPTIONAL_METRICS.map((name) => ({
+      group.optional.map((name) => ({
         name,
+        label: t(`run.chart.metric.${name}`),
         active: optional.includes(name),
-        disabled: !METRIC_NAMES.includes(name),
       })),
-    [optional],
+    [group, optional, t],
   );
 
   return (
@@ -418,7 +414,7 @@ export function MetricsCharts() {
                   )
                 }
               />
-              <span>{t(`run.chart.metric.${item.name}`)}</span>
+              <span>{item.label}</span>
             </label>
           ))}
         </span>
