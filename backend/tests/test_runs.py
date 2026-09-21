@@ -196,9 +196,11 @@ def test_run_lifecycle(client: TestClient) -> None:
 
 
 def test_metrics_persisted_and_replayable(client: TestClient) -> None:
-    runs = client.get("/api/runs", params={"limit": 5}).json()["runs"]
-    assert runs, "应有历史 run"
-    run = next(item for item in runs if item["total_steps"] and item["status"] == "stopped")
+    # 自起一个跑满 2 个 epoch 的 run：上一个测试留下的 run 停在何处取决于机器负载，
+    # 可能没跨过 epoch 边界（val_loss 只在 epoch 末写），不能作为断言依据
+    hyper = {**SMALL_HYPER, "epochs": 2}
+    run_id = start_run(client, hyperparams=hyper)
+    run = wait_for(client, run_id, lambda item: item["status"] == "finished")
     response = client.get(
         f"/api/runs/{run['id']}/metrics", params={"names": "loss,acc,lr,val_loss,val_acc,grad_norm,throughput"}
     )
@@ -217,7 +219,7 @@ def test_metrics_persisted_and_replayable(client: TestClient) -> None:
     assert db.count_metrics(run["id"]) > 100
     detail = client.get(f"/api/runs/{run['id']}").json()["run"]
     assert detail["best_metric"] is not None
-    assert detail["hyperparams"]["epochs"] == SMALL_HYPER["epochs"]
+    assert detail["hyperparams"]["epochs"] == hyper["epochs"]
     assert detail["graph"]["nodes"], "详情应带图 IR 供回放"
 
     # 降采样：max_points 生效
