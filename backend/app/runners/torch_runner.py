@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import logging
-import queue
 import sys
 import time
-import traceback
 from collections import deque
 from typing import Any
 
@@ -16,95 +14,12 @@ import torch.nn as nn
 from app import config as app_config
 from app.datasets import loaders, registry
 from app.graph.ir import bind_dataset, parse_graph, validate_graph
-from app.graph.module import NodeExecutionError, build_graph_module
+from app.graph.module import build_graph_module
 from app.probes import hooks as probe_hooks
 from app.runners import base
 from app.store import files
 
 log = logging.getLogger(__name__)
-
-
-class RunFailed(Exception):
-    """训练前置失败（数据集/图/超参）：带定位信息，转 error 事件。"""
-
-    def __init__(
-        self,
-        code: str,
-        message_key: str,
-        error_args: dict[str, Any] | None = None,
-        detail: str = "",
-        node_id: str | None = None,
-    ):
-        super().__init__(detail or message_key)
-        self.code = code
-        self.message_key = message_key
-        self.error_args = error_args or {}
-        self.detail = detail
-        self.node_id = node_id
-
-
-class _Stopped(Exception):
-    """用户停止：走正常收尾路径（flush + stopped 状态）。"""
-
-
-class _Control:
-    def __init__(self, lr: float) -> None:
-        self.pause = False
-        self.stop = False
-        self.lr = lr
-        self.lr_dirty = False
-        self.batch_size: int | None = None
-
-
-class _Reporter:
-    """指标聚合与节流上报（docs/02 §5.4）。"""
-
-    def __init__(self, event_queue: Any) -> None:
-        self.event_queue = event_queue
-        self.buffer: list[dict[str, Any]] = []
-        self.last_emit = time.monotonic()
-
-    def add(self, step: int, epoch: int, values: dict[str, Any]) -> None:
-        self.buffer.append({"step": step, "epoch": epoch, "values": values})
-
-    def maybe_flush(self, force: bool = False) -> None:
-        if not self.buffer:
-            return
-        if not force and len(self.buffer) < base.REPORT_STEPS:
-            if time.monotonic() - self.last_emit < base.REPORT_INTERVAL_S:
-                return
-        self.flush()
-
-    def flush(self) -> None:
-        if not self.buffer:
-            return
-        self.event_queue.put({"type": base.EVENT_METRICS, "points": self.buffer})
-        self.buffer = []
-        self.last_emit = time.monotonic()
-
-
-def _drain(control_queue: Any, state: _Control) -> None:
-    while True:
-        try:
-            command = control_queue.get_nowait()
-        except queue.Empty:
-            return
-        action = command.get("action")
-        if action == base.CTRL_PAUSE:
-            state.pause = True
-        elif action == base.CTRL_RESUME:
-            state.pause = False
-        elif action == base.CTRL_STOP:
-            state.stop = True
-        elif action == base.CTRL_KILL:
-            raise SystemExit(0)
-        elif action == base.CTRL_SET_LR:
-            state.lr = float(command.get("value"))
-            state.lr_dirty = True
-        elif action == base.CTRL_SET_BATCH_SIZE:
-            state.batch_size = int(command.get("value"))
-        else:
-            log.warning("未知控制命令：%r", command)
 
 
 def _build_optimizer(model: nn.Module, hyper: dict[str, Any]) -> torch.optim.Optimizer:
@@ -173,7 +88,7 @@ def run_training(config: dict[str, Any], event_queue: Any, control_queue: Any) -
     device = torch.device(
         config.get("device") or ("cuda" if torch.cuda.is_available() else "cpu")
     )
-    reporter = _Reporter(event_queue)
+    reporter = base.Reporter(event_queue)
     step = 0
     epoch = 0
     best_metric: float | None = None
@@ -194,13 +109,13 @@ def run_training(config: dict[str, Any], event_queue: Any, control_queue: Any) -
     try:
         spec = registry.get_spec(config["dataset_id"])
         if spec is None:
-            raise RunFailed(
+            raise base.RunFailed(
                 "dataset_not_found",
                 "errors.dataset.notFound",
                 {"id": config["dataset_id"]},
             )
         if not registry.is_cached(spec):
-            raise RunFailed(
+            raise base.RunFailed(
                 "dataset_not_cached",
                 "errors.dataset.notCached",
                 {"id": spec.id, "path": str(registry.raw_dir(spec))},
@@ -212,7 +127,7 @@ def run_training(config: dict[str, Any], event_queue: Any, control_queue: Any) -
         errors = [issue for issue in issues if issue.severity == "error"]
         if errors:
             first = errors[0].to_dict()
-            raise RunFailed(
+            raise base.RunFailed(
                 "invalid_ir",
                 first["message_key"],
                 first.get("args") or {},
@@ -237,7 +152,7 @@ def run_training(config: dict[str, Any], event_queue: Any, control_queue: Any) -
             seed=config.get("seed") or 0,
         )
         if int(info["steps_per_epoch"]) == 0:
-            raise RunFailed("empty_dataset", "errors.run.emptyDataset", {"id": spec.id})
+            raise base.RunFailed("empty_dataset", "errors.run.emptyDataset", {"id": spec.id})
         planned_steps = int(hyper["epochs"]) * int(info["steps_per_epoch"])
 
         # 节点子模块在首次前向时才构建（D3），先用一个真实批次物化参数，optimizer 才有参数可优化
@@ -279,7 +194,7 @@ def run_training(config: dict[str, Any], event_queue: Any, control_queue: Any) -
                 }
             )
 
-        state = _Control(lr=float(hyper["lr"]))
+        state = base.ControlState(lr=float(hyper["lr"]))
         batch_size = int(hyper["batch_size"])
         step_times: deque[float] = deque(maxlen=base.THROUGHPUT_WINDOW)
         sequence = _is_sequence(meta)
@@ -292,14 +207,7 @@ def run_training(config: dict[str, Any], event_queue: Any, control_queue: Any) -
             emit=event_queue.put,
         )
         if probe_engine.active():
-            event_queue.put(
-                {
-                    "type": base.EVENT_LOG,
-                    "level": "info",
-                    "key": "log.probe.attached",
-                    "args": {"n": len(probe_engine.spec_payload())},
-                }
-            )
+            probe_engine.writer.log_attached(len(probe_engine.spec_payload()))
         model.train()
 
         for epoch in range(1, int(hyper["epochs"]) + 1):
@@ -323,26 +231,18 @@ def run_training(config: dict[str, Any], event_queue: Any, control_queue: Any) -
                 )
 
             for batch_x, batch_y in train_loader:
-                _drain(control_queue, state)
+                base.drain_control(control_queue, state)
                 if state.stop:
-                    raise _Stopped
-                if state.pause:
-                    reporter.maybe_flush(force=True)
-                    event_queue.put(
-                        base.status_event(
-                            base.STATUS_PAUSED, step=step, epoch=epoch, elapsed_s=elapsed()
-                        )
-                    )
-                    while state.pause and not state.stop:
-                        time.sleep(base.PAUSE_POLL_S)
-                        _drain(control_queue, state)
-                    if state.stop:
-                        raise _Stopped
-                    event_queue.put(
-                        base.status_event(
-                            base.STATUS_RUNNING, step=step, epoch=epoch, elapsed_s=elapsed()
-                        )
-                    )
+                    raise base.RunStopped
+                base.handle_pause(
+                    control_queue,
+                    state,
+                    reporter=reporter,
+                    emit=event_queue.put,
+                    step=step,
+                    epoch=epoch,
+                    elapsed=elapsed,
+                )
 
                 if state.lr_dirty:
                     for group in optimizer.param_groups:
@@ -448,7 +348,7 @@ def run_training(config: dict[str, Any], event_queue: Any, control_queue: Any) -
         )
         return 0
 
-    except _Stopped:
+    except base.RunStopped:
         reporter.flush()
         event_queue.put(
             base.status_event(
@@ -460,52 +360,10 @@ def run_training(config: dict[str, Any], event_queue: Any, control_queue: Any) -
             )
         )
         return 0
-    except RunFailed as exc:
-        reporter.flush()
-        event_queue.put(
-            {
-                "type": base.EVENT_ERROR,
-                "code": exc.code,
-                "message_key": exc.message_key,
-                "args": exc.error_args,
-                "node_id": exc.node_id,
-                "detail": exc.detail,
-            }
-        )
-        event_queue.put(
-            base.status_event(base.STATUS_FAILED, step=step, epoch=epoch, elapsed_s=elapsed())
-        )
-        return 1
-    except NodeExecutionError as exc:
-        reporter.flush()
-        event_queue.put(
-            {
-                "type": base.EVENT_ERROR,
-                "code": exc.code,
-                "message_key": exc.message_key,
-                "args": exc.error_args,
-                "node_id": exc.node_id,
-                "detail": exc.detail,
-            }
-        )
-        event_queue.put(
-            base.status_event(base.STATUS_FAILED, step=step, epoch=epoch, elapsed_s=elapsed())
-        )
-        return 1
     except Exception as exc:  # noqa: BLE001 - 兜底：任何异常都要变成可读错误事件
         reporter.flush()
-        event_queue.put(
-            {
-                "type": base.EVENT_ERROR,
-                "code": "runner_failed",
-                "message_key": "errors.run.failed",
-                "args": {"type": type(exc).__name__},
-                "detail": traceback.format_exc(limit=6)[-2000:],
-            }
-        )
-        event_queue.put(
-            base.status_event(base.STATUS_FAILED, step=step, epoch=epoch, elapsed_s=elapsed())
-        )
+        for event in base.failure_payload(exc, step=step, epoch=epoch, elapsed_s=elapsed()):
+            event_queue.put(event)
         return 1
 
 

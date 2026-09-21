@@ -1,0 +1,36 @@
+{
+  "ir_version": 1,
+  "id": "lstm-char",
+  "kind": "dl",
+  "task": "text_lm",
+  "name": { "zh": "字符级 LSTM", "en": "Char-level LSTM" },
+  "desc": {
+    "zh": "单层 LSTM（隐藏 64）逐字符预测下一字符，默认配《爱丽丝梦游仙境》语料；hidden 探针的热力图随训练步从噪声变成规整的字符模式",
+    "en": "A single-layer LSTM (hidden 64) predicting the next character; defaults to the Alice corpus. The hidden-probe heatmap turns from noise into structured character patterns as training proceeds"
+  },
+  "dataset_id": "alice",
+  "hyper_defaults": {
+    "optimizer": "adamw",
+    "lr": 0.003,
+    "batch_size": 32,
+    "epochs": 5,
+    "loss": "cross_entropy",
+    "grad_clip": 1.0,
+    "train_size": 3000,
+    "val_size": 500
+  },
+  "probe_defaults": ["lstm1"],
+  "nodes": [
+    { "id": "input", "type": "Input", "params": { "shape": [32] }, "ui": { "x": 0, "y": 140 } },
+    { "id": "emb", "type": "Embedding", "params": { "num_embeddings": 76, "embedding_dim": 64 }, "ui": { "x": 220, "y": 140 } },
+    { "id": "lstm1", "type": "LSTM", "params": { "hidden_size": 64, "num_layers": 1, "bidirectional": false, "return_sequences": true }, "ui": { "x": 440, "y": 140 } },
+    { "id": "head", "type": "Linear", "params": { "out_features": 76, "bias": true }, "ui": { "x": 660, "y": 140 } },
+    { "id": "output", "type": "Output", "params": { "classes": 76, "out_dim": 0 }, "ui": { "x": 880, "y": 140 } }
+  ],
+  "edges": [
+    { "id": "e1", "source": "input", "source_port": "out", "target": "emb", "target_port": "in" },
+    { "id": "e2", "source": "emb", "source_port": "out", "target": "lstm1", "target_port": "in" },
+    { "id": "e3", "source": "lstm1", "source_port": "out", "target": "head", "target_port": "in" },
+    { "id": "e4", "source": "head", "source_port": "out", "target": "output", "target_port": "in" }
+  ]
+}

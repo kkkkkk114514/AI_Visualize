@@ -6,13 +6,11 @@
 from __future__ import annotations
 
 import base64
-import secrets
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
-import torch
 
-KINDS = ("feature_grid", "attention", "hidden", "histogram", "weights")
+KINDS = ("feature_grid", "attention", "hidden", "histogram", "weights", "boundary", "grid")
 
 # kind 默认按节点类型推导（docs/02 §6.1）
 DERIVED_KIND: dict[str, str] = {
@@ -43,8 +41,11 @@ def derived_kind(node_type: str) -> str:
     return DERIVED_KIND.get(node_type, DEFAULT_KIND)
 
 
-def new_snapshot_id() -> str:
-    return f"s_{secrets.token_hex(4)}"
+def _float_tensor(tensor: Any) -> Any:
+    """张量 → float32 副本；torch 惰性导入（ML / RL 子进程不加载 torch，docs/02 §13.4）。"""
+    import torch
+
+    return tensor.detach().to(torch.float32)
 
 
 # ---------------------------------------------------------------- 基础操作
@@ -59,6 +60,7 @@ def _quantize_uint8(array: np.ndarray, low: float, high: float) -> np.ndarray:
     if not np.isfinite(span) or span <= 0.0:
         return np.zeros(array.shape, dtype=np.uint8)
     scaled = np.clip((array.astype(np.float32) - low) / span, 0.0, 1.0)
+    scaled = np.nan_to_num(scaled, nan=0.0, posinf=1.0, neginf=0.0)
     return np.round(scaled * 255.0).astype(np.uint8)
 
 
@@ -67,6 +69,8 @@ def _pool_to(array: np.ndarray, max_side: int) -> np.ndarray:
     rows, cols = int(array.shape[0]), int(array.shape[1])
     if rows <= max_side and cols <= max_side:
         return array
+    import torch
+
     tensor = torch.from_numpy(np.ascontiguousarray(array, dtype=np.float32))
     pooled = torch.nn.functional.adaptive_avg_pool2d(
         tensor[None, None], (min(rows, max_side), min(cols, max_side))
@@ -79,6 +83,11 @@ def _stride_sample(array: np.ndarray, max_side: int) -> np.ndarray:
     rows, cols = int(array.shape[0]), int(array.shape[1])
     step = max(1, -(-rows // max_side), -(-cols // max_side))
     return array[::step, ::step]
+
+
+def _finite(value: float) -> float:
+    """NaN / ±inf 一律压成 0.0：JSON 没有这两个值，落到快照里会让前端解析失败。"""
+    return float(value) if np.isfinite(value) else 0.0
 
 
 def _payload(
@@ -94,8 +103,8 @@ def _payload(
         "shape": list(array.shape),
         "dtype": dtype,
         "layout": layout,
-        "min": float(low),
-        "max": float(high),
+        "min": _finite(low),
+        "max": _finite(high),
         "data_b64": _b64(array),
     }
     if meta:
@@ -123,7 +132,7 @@ def encode_feature_grid(
     只接受四维张量：三维既可能是 (C,H,W)，也可能是文本模型里 Linear 的 (B,T,C)，
     无法区分，按契约对非线性层取 feature_grid 应停用该流（docs/02 §6.1）。
     """
-    x = tensor.detach().to(torch.float32)
+    x = _float_tensor(tensor)
     if x.dim() != 4:
         raise ProbeShapeError("errors.probe.kindMismatch", {"shape": list(tensor.shape), "kind": "feature_grid"})
     sample = _pick_sample(x, sample_index, batch_dim=True)
@@ -148,7 +157,7 @@ def encode_attention(
     causal: bool = False,
 ) -> dict[str, Any]:
     """(B,heads,T,T) → 前 min(heads, max_items, 8) 头；值域固定 [0,1]。"""
-    w = weights.detach().to(torch.float32)
+    w = _float_tensor(weights)
     if w.dim() == 3:
         w = w.unsqueeze(0)
     if w.dim() != 4 or w.shape[-1] != w.shape[-2]:
@@ -172,7 +181,7 @@ def encode_hidden(
     tensor: torch.Tensor, *, max_items: int = DEFAULT_MAX_ITEMS, sample_index: int = 0
 ) -> dict[str, Any]:
     """(B,T,H) → 取一个样本的 (T,H) 热力图；二维输入按 (T,H) 解释。"""
-    x = tensor.detach().to(torch.float32)
+    x = _float_tensor(tensor)
     if x.dim() == 3:
         x = _pick_sample(x, sample_index, batch_dim=True)
     elif x.dim() != 2:
@@ -189,7 +198,7 @@ def encode_hidden(
 
 def encode_histogram(tensor: torch.Tensor, **_ignored: Any) -> dict[str, Any]:
     """32 个等宽 bin 的计数（uint32 不归一）；min == max 时范围取 ±0.5。"""
-    values = tensor.detach().to(torch.float32).reshape(-1).numpy()
+    values = _float_tensor(tensor).reshape(-1).numpy()
     if values.size == 0:
         raise ProbeShapeError("errors.probe.kindMismatch", {"shape": list(tensor.shape), "kind": "histogram"})
     low, high = float(values.min()), float(values.max())
@@ -210,7 +219,7 @@ def encode_weights(
     param: torch.Tensor, *, max_items: int = DEFAULT_MAX_ITEMS, sample_index: int = 0
 ) -> dict[str, Any]:
     """参数 (out, ...) → [min(out,32), 1, W]：每行展平后池化到 ≤32 宽。"""
-    w = param.detach().to(torch.float32)
+    w = _float_tensor(param)
     if w.dim() < 2:
         raise ProbeShapeError("errors.probe.kindMismatch", {"shape": list(param.shape), "kind": "weights"})
     rows_total = int(w.shape[0])
@@ -229,15 +238,80 @@ def encode_weights(
     )
 
 
-def encode(kind: str, tensor: torch.Tensor, **options: Any) -> dict[str, Any]:
+def encode_boundary(
+    values: np.ndarray,
+    *,
+    mode: str,
+    x_range: Sequence[float],
+    y_range: Sequence[float],
+    algo: str,
+    meta: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """决策网格 `[G,G]`（契约见 docs/02 §13.5）：`label` 为类别下标，`score` 按真实值域归一。
+
+    行序即 y 升序（`(0,0)` 在左下）；`label` 模式的 min / max 固定 0 / 1。
+    """
+    grid = np.asarray(values, dtype=np.float32)
+    if grid.ndim != 2 or grid.shape[0] != grid.shape[1]:
+        raise ProbeShapeError(
+            "errors.probe.kindMismatch", {"shape": list(grid.shape), "kind": "boundary"}
+        )
+    if mode == "label":
+        low, high = 0.0, 1.0
+    else:
+        low, high = float(grid.min()), float(grid.max())
+    payload_meta: dict[str, Any] = {
+        "mode": mode,
+        "x_range": [float(x_range[0]), float(x_range[1])],
+        "y_range": [float(y_range[0]), float(y_range[1])],
+        "algo": str(algo),
+    }
+    payload_meta.update(meta or {})
+    return _payload(
+        _quantize_uint8(grid, low, high),
+        dtype="uint8",
+        layout="HW",
+        low=low,
+        high=high,
+        meta=payload_meta,
+    )
+
+
+def encode_grid(
+    values: np.ndarray, *, policy: Sequence[int], meta: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """网格世界 `[H,W]`：值 = `max_a Q(s,a)`（契约见 docs/02 §13.5），meta 带策略与轨迹。"""
+    grid = np.asarray(values, dtype=np.float32)
+    if grid.ndim != 2:
+        raise ProbeShapeError("errors.probe.kindMismatch", {"shape": list(grid.shape), "kind": "grid"})
+    if len(policy) != int(grid.shape[0] * grid.shape[1]):
+        raise ProbeShapeError("errors.probe.kindMismatch", {"shape": list(grid.shape), "kind": "grid"})
+    low, high = float(grid.min()), float(grid.max())
+    payload_meta: dict[str, Any] = {"policy": [int(action) for action in policy]}
+    payload_meta.update(meta or {})
+    return _payload(
+        _quantize_uint8(grid, low, high),
+        dtype="uint8",
+        layout="HW",
+        low=low,
+        high=high,
+        meta=payload_meta,
+    )
+
+
+def encode(kind: str, source: Any, **options: Any) -> dict[str, Any]:
     if kind == "feature_grid":
-        return encode_feature_grid(tensor, **options)
+        return encode_feature_grid(source, **options)
     if kind == "attention":
-        return encode_attention(tensor, **options)
+        return encode_attention(source, **options)
     if kind == "hidden":
-        return encode_hidden(tensor, **options)
+        return encode_hidden(source, **options)
     if kind == "histogram":
-        return encode_histogram(tensor, **options)
+        return encode_histogram(source, **options)
     if kind == "weights":
-        return encode_weights(tensor, **options)
+        return encode_weights(source, **options)
+    if kind == "boundary":
+        return encode_boundary(source, **options)
+    if kind == "grid":
+        return encode_grid(source, **options)
     raise ProbeShapeError("errors.probe.badKind", {"kind": kind})

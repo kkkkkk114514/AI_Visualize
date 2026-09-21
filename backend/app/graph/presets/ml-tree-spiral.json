@@ -1,0 +1,20 @@
+{
+  "ir_version": 1,
+  "id": "ml-tree-spiral",
+  "kind": "ml",
+  "task": "binary_classification",
+  "name": { "zh": "决策树 · 双螺旋", "en": "Decision Tree · Spiral" },
+  "desc": {
+    "zh": "CART 最佳优先分裂（每步一次分裂）：轴线切出的阶梯边界随深度逐步包住螺旋；label 模式下角标显示 depth / leaves / nodes",
+    "en": "CART best-first splits (one split per step): the axis-aligned staircase boundary gradually wraps around the spiral; in label mode the corner shows depth / leaves / nodes"
+  },
+  "dataset_id": "spiral",
+  "algo": "decision_tree",
+  "params": {
+    "max_depth": 6,
+    "min_samples_leaf": 5,
+    "max_nodes": 63,
+    "render_delay_ms": 60
+  },
+  "probe_defaults": { "every_n_steps": 2 }
+}

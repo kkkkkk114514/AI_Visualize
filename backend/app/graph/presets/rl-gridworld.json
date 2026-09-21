@@ -1,0 +1,32 @@
+{
+  "ir_version": 1,
+  "id": "rl-gridworld",
+  "kind": "rl",
+  "task": "control",
+  "name": { "zh": "网格世界 · Q 学习", "en": "GridWorld · Q-Learning" },
+  "desc": {
+    "zh": "表格 Q-learning：ε 从 0.5 衰减到 0.05，策略箭头从随机乱指收敛成直达终点的路线；奖励格每 episode 只结算一次，可在表单里改障碍后重训",
+    "en": "Tabular Q-learning: epsilon decays from 0.5 to 0.05 while the policy arrows converge from random to a route straight to the goal. Each reward cell pays out once per episode; edit the obstacles in the form and retrain"
+  },
+  "dataset_id": "gridworld",
+  "algo": "q_learning",
+  "env": {
+    "width": 10,
+    "height": 6,
+    "start": [0, 0],
+    "goal": [9, 5],
+    "obstacles": [[3, 1], [3, 2], [6, 3]],
+    "rewards": [[7, 4, 1.0]]
+  },
+  "params": {
+    "episodes": 250,
+    "max_steps": 60,
+    "alpha": 0.2,
+    "gamma": 0.95,
+    "epsilon_start": 0.5,
+    "epsilon_end": 0.05,
+    "epsilon_decay": 0.98,
+    "render_delay_ms": 5
+  },
+  "probe_defaults": { "every_n_steps": 80 }
+}

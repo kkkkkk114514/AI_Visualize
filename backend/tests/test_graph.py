@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from app.graph import shapes
 from app.graph.ir import load_preset, parse_graph, validate_graph
+from app.probes import hooks as probe_hooks
 
 PRESET_DIR = None
 
@@ -327,6 +328,21 @@ def test_text_graph_with_embedding_attention_lstm():
     assert result["nodes"]["lstm"]["params"] == sum(p.numel() for p in reference.parameters())
 
 
+def test_lstm_char_preset_shapes_and_hidden_probe():
+    graph = load_preset("lstm-char")
+    assert graph is not None
+    result = shapes.analyze(graph)
+    assert result["ok"], result["errors"]
+    assert result["nodes"]["emb"]["out_shape"] == [2, 32, 64]
+    assert result["nodes"]["lstm1"]["out_shape"] == [2, 32, 64]  # return_sequences
+    assert result["nodes"]["head"]["out_shape"] == [2, 32, 76]
+    assert parse_graph(graph.to_dict()) is not None  # 预置文件可往返
+
+    probes = probe_hooks.resolve_probes(None, graph)
+    assert [spec.node_id for spec in probes] == ["lstm1"]
+    assert probes[0].kind == "hidden"  # LSTM 的派生探针类型（docs/02 §6.1）
+
+
 def test_sinusoidal_encoding_shapes():
     graph = parse_graph(
         {
@@ -412,8 +428,16 @@ def test_api_models_list_and_detail(client):
     assert response.status_code == 200
     groups = response.json()["groups"]
     ids = {m["id"] for m in groups["dl"]}
-    assert {"mlp-mnist", "cnn-mnist"} <= ids
-    assert groups["ml"] == [] and groups["rl"] == []
+    assert {"mlp-mnist", "cnn-mnist", "lstm-char"} <= ids
+    assert {m["id"] for m in groups["ml"]} >= {
+        "ml-linear-blobs",
+        "ml-logreg-moons",
+        "ml-tree-spiral",
+        "ml-forest-moons",
+        "ml-svm-circles",
+    }
+    assert {m["id"] for m in groups["rl"]} == {"rl-gridworld"}
+    assert all(m["kind"] == "ml" for m in groups["ml"])
 
     response = client.get("/api/models/cnn-mnist")
     assert response.status_code == 200

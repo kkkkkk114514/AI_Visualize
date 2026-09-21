@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import config
-from app.api import datasets, graph, health, models, runs, ws
+from app.api import algos, datasets, graph, health, models, runs, ws
 from app.api.ws import hub
 from app.runners.manager import manager
 from app.store import db
@@ -41,6 +41,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title=config.SERVICE_NAME, version=config.SERVICE_VERSION, lifespan=lifespan)
 app.include_router(health.router)
+app.include_router(algos.router)
 app.include_router(models.router)
 app.include_router(graph.router)
 app.include_router(datasets.router)

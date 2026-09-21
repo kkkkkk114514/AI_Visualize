@@ -1,0 +1,22 @@
+{
+  "ir_version": 1,
+  "id": "ml-svm-circles",
+  "kind": "ml",
+  "task": "binary_classification",
+  "name": { "zh": "SVM · 同心圆", "en": "SVM · Concentric Circles" },
+  "desc": {
+    "zh": "核化 Pegasos（hinge + L2，RBF 核）：s=0 的等值带就是间隔带，边界随支持向量逐个落位而弯成圆环，描边的点即当前支持向量",
+    "en": "Kernelised Pegasos (hinge + L2, RBF kernel): the s=0 band is the margin, the boundary bends into a ring as support vectors take their places, and outlined points mark the current support vectors"
+  },
+  "dataset_id": "circles",
+  "algo": "svm",
+  "params": {
+    "kernel": "rbf",
+    "C": 1.0,
+    "gamma": 8.0,
+    "lr": 1.0,
+    "epochs": 4,
+    "render_delay_ms": 5
+  },
+  "probe_defaults": { "every_n_steps": 20 }
+}

@@ -71,9 +71,11 @@ def wait_for(
     raise AssertionError(f"等待超时，最后状态：{latest}")
 
 
-def start_probe_run(client: TestClient, probes: Any = PROBES) -> dict[str, Any]:
+def start_probe_run(
+    client: TestClient, probes: Any = PROBES, model_id: str = "gpt-char"
+) -> dict[str, Any]:
     payload = {
-        "model_id": "gpt-char",
+        "model_id": model_id,
         "dataset_id": "alice",
         "seed": 7,
         "hyperparams": dict(HYPER),
@@ -216,6 +218,24 @@ def test_probe_defaults_come_from_graph(client: TestClient) -> None:
     ]
     assert started["probes"][0]["every_n_steps"] == config.PROBE_DEFAULT_EVERY_N
     stop_run(client, started["id"])
+
+
+def test_lstm_char_preset_writes_hidden_heatmaps(client: TestClient) -> None:
+    """M5：字符级 LSTM 的 `hidden` 探针（(T,H) 热力图）随训练步落盘（docs/02 §6.1 / §13）。"""
+    probes = [{"node_id": "lstm1", "kind": "hidden", "every_n_steps": 5}]
+    started = start_probe_run(client, probes=probes, model_id="lstm-char")
+    assert [(item["node_id"], item["kind"]) for item in started["probes"]] == [("lstm1", "hidden")]
+    run_id = started["id"]
+    run = wait_for(client, run_id, lambda item: item["status"] == "finished")
+    assert run["kind"] == "dl" and run["total_steps"] > 0
+    assert run["best_metric"] is not None
+
+    snapshots = client.get(f"/api/runs/{run_id}/snapshots?kind=hidden").json()["snapshots"]
+    assert len(snapshots) >= 2  # 每 5 步一张，20 步的 run 至少两张
+    payload = client.get(f"/api/runs/{run_id}/snapshots/{snapshots[0]['id']}").json()
+    assert payload["layout"] == "TH" and payload["shape"] == [32, 64]
+    matrix = dequantize(payload)
+    assert matrix.shape == (32, 64) and float(matrix.max() - matrix.min()) > 0.0
 
 
 def test_runs_schema_migration_adds_probes_json(tmp_path: Any) -> None:

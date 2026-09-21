@@ -1,0 +1,21 @@
+{
+  "ir_version": 1,
+  "id": "ml-logreg-moons",
+  "kind": "ml",
+  "task": "binary_classification",
+  "name": { "zh": "逻辑回归 · 双月", "en": "Logistic Regression · Moons" },
+  "desc": {
+    "zh": "sigmoid + 交叉熵，决策线 s=0：双月交错，直线只能从中间穿过——用来看线性模型的“够不着”与概率场的渐变",
+    "en": "Sigmoid with cross-entropy, decision line at s=0: the interleaved moons can only be split by a straight line through the middle — a good look at a linear model's limits and at a probability field fading out"
+  },
+  "dataset_id": "moons",
+  "algo": "logistic_regression",
+  "params": {
+    "lr": 0.5,
+    "epochs": 40,
+    "batch_size": 32,
+    "l2": 0.0,
+    "render_delay_ms": 20
+  },
+  "probe_defaults": { "every_n_steps": 10 }
+}

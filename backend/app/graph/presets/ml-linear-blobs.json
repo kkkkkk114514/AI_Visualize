@@ -1,0 +1,21 @@
+{
+  "ir_version": 1,
+  "id": "ml-linear-blobs",
+  "kind": "ml",
+  "task": "binary_classification",
+  "name": { "zh": "线性回归 · 双高斯团", "en": "Linear Regression · Blobs" },
+  "desc": {
+    "zh": "最小二乘拟合一条直线（决策线 s=0.5）：双高斯团线性可分，直线几步就摆到位，适合看“边界随迭代成形”的起点",
+    "en": "Least-squares fit of a line (decision line at s=0.5): the two Gaussian blobs are linearly separable, so the line settles in a few steps — a clean first look at a boundary taking shape"
+  },
+  "dataset_id": "blobs",
+  "algo": "linear_regression",
+  "params": {
+    "lr": 0.5,
+    "epochs": 40,
+    "batch_size": 32,
+    "l2": 0.0,
+    "render_delay_ms": 20
+  },
+  "probe_defaults": { "every_n_steps": 10 }
+}

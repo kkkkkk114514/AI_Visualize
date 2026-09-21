@@ -127,6 +127,83 @@ XIYOUJI = DatasetSpec(
 
 SPECS.update({ALICE.id: ALICE, XIYOUJI.id: XIYOUJI})
 
+
+def _synth(
+    dataset_id: str, name: dict[str, str], note: dict[str, str]
+) -> DatasetSpec:
+    """二维合成集：文件为空 ⇒ is_cached 恒真，点集由 synth2d 按固定种子程序生成（§13.3）。"""
+    return DatasetSpec(
+        id=dataset_id,
+        name=name,
+        task="binary_classification",
+        input_shape=(2,),
+        num_classes=2,
+        mean=0.0,
+        std=1.0,
+        splits=(),
+        files=(),
+        note=note,
+        loader="synth2d",
+    )
+
+
+MOONS = _synth(
+    "moons",
+    {"zh": "双月（moons）", "en": "Two Moons"},
+    {
+        "zh": "程序生成 300 训练 + 200 验证（噪声 0.18 / 种子 7）；无需下载",
+        "en": "Generated on the fly: 300 train + 200 val (noise 0.18 / seed 7); nothing to download",
+    },
+)
+
+CIRCLES = _synth(
+    "circles",
+    {"zh": "同心圆（circles）", "en": "Concentric Circles"},
+    {
+        "zh": "程序生成 300 训练 + 200 验证（噪声 0.12 / 种子 11）；无需下载",
+        "en": "Generated on the fly: 300 train + 200 val (noise 0.12 / seed 11); nothing to download",
+    },
+)
+
+BLOBS = _synth(
+    "blobs",
+    {"zh": "双高斯团（blobs）", "en": "Gaussian Blobs"},
+    {
+        "zh": "程序生成 300 训练 + 200 验证（离散度 0.40 / 种子 13）；线性可分，作线性模型基线；无需下载",
+        "en": "Generated on the fly: 300 train + 200 val (spread 0.40 / seed 13); linearly separable baseline; nothing to download",
+    },
+)
+
+SPIRAL = _synth(
+    "spiral",
+    {"zh": "双螺旋（spiral）", "en": "Two Spirals"},
+    {
+        "zh": "程序生成 300 训练 + 200 验证（噪声 0.06 / 种子 17）；强非线性，核方法与树明显占优；无需下载",
+        "en": "Generated on the fly: 300 train + 200 val (noise 0.06 / seed 17); strongly non-linear; nothing to download",
+    },
+)
+
+GRIDWORLD = DatasetSpec(
+    id="gridworld",
+    name={"zh": "网格世界（12×8）", "en": "GridWorld (12×8)"},
+    task="control",
+    input_shape=(),
+    num_classes=0,
+    mean=0.0,
+    std=1.0,
+    splits=(),
+    files=(),
+    note={
+        "zh": "无数据文件：环境（起点 / 终点 / 障碍 / 奖励）定义在模型里，可编辑后重训",
+        "en": "No data files: the environment (start / goal / obstacles / rewards) lives in the model spec",
+    },
+    loader="gridworld",
+)
+
+SPECS.update(
+    {spec.id: spec for spec in (MOONS, CIRCLES, BLOBS, SPIRAL, GRIDWORLD)}
+)
+
 _memo_lock = threading.Lock()
 _md5_memo: dict[tuple[str, int, int], bool] = {}
 

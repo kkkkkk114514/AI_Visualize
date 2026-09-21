@@ -16,6 +16,20 @@ METRIC_NAMES: tuple[str, ...] = (
     "grad_norm",
     "throughput",
     "vram_mb",
+    # ML（docs/02 §5.4）：SVM / 树 / 森林的算法专属指标
+    "margin",
+    "n_sv",
+    "depth",
+    "leaves",
+    "n_nodes",
+    "n_trees",
+    # RL（docs/02 §5.4）：Q-learning 的逐步与逐 episode 指标
+    "reward",
+    "q_delta",
+    "episode_reward",
+    "epsilon",
+    "episode_steps",
+    "success",
 )
 
 # 曲线默认勾选的主指标（其余在 UI 里可选显示）

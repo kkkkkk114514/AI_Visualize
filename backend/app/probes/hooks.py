@@ -5,10 +5,8 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
@@ -18,6 +16,7 @@ from torch.utils.hooks import RemovableHandle
 from app import config
 from app.graph.ir import GraphIR
 from app.probes import encode
+from app.probes.writer import SnapshotWriter
 from app.runners import base
 
 log = logging.getLogger(__name__)
@@ -118,10 +117,6 @@ def find_weight_tensor(module: torch.nn.Module) -> torch.Tensor | None:
     return None
 
 
-def _now_iso() -> str:
-    return datetime.now().astimezone().isoformat(timespec="seconds")
-
-
 class ProbeEngine:
     """采样调度：`begin_step` 挂 hook → `end_step` 摘 hook、编码、落盘、发事件。"""
 
@@ -138,12 +133,7 @@ class ProbeEngine:
         self._specs = list(specs)
         self._model = model
         self._node_types = node_types
-        self._run_id = run_id
-        self._dir = Path(snapshots_dir)
-        self._emit = emit
-        self._counts: dict[str, int] = {}
-        self._disabled: dict[str, str] = {}
-        self._capped: set[str] = set()
+        self.writer = SnapshotWriter(run_id=run_id, snapshots_dir=snapshots_dir, emit=emit)
         self._due: list[ProbeSpec] = []
         self._captured: dict[str, torch.Tensor] = {}
         self._hooks: list[RemovableHandle] = []
@@ -164,7 +154,7 @@ class ProbeEngine:
         self._due = [
             spec
             for spec in self._specs
-            if spec.stream not in self._disabled and step % spec.every_n_steps == 0
+            if not self.writer.is_disabled(spec.stream) and step % spec.every_n_steps == 0
         ]
         if not self._due:
             return False
@@ -223,54 +213,15 @@ class ProbeEngine:
         except encode.ProbeShapeError as exc:
             self._disable(spec, exc.message_key, exc.error_args)
             return
-
-        snapshot_id = encode.new_snapshot_id()
-        created_at = _now_iso()
-        record = {
-            "id": snapshot_id,
-            "run_id": self._run_id,
-            "step": self._step,
-            "epoch": self._epoch,
-            "node_id": spec.node_id,
-            "kind": spec.kind,
-            **payload,
-            "created_at": created_at,
-        }
-        self._dir.mkdir(parents=True, exist_ok=True)
-        path = self._dir / f"{snapshot_id}.json"
-        path.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
-
-        self._counts[spec.stream] = self._counts.get(spec.stream, 0) + 1
-        self._emit(
-            {
-                "type": base.EVENT_PROBE,
-                "run_id": self._run_id,
-                "snapshot_id": snapshot_id,
-                "step": self._step,
-                "epoch": self._epoch,
-                "node_id": spec.node_id,
-                "kind": spec.kind,
-                "shape": payload["shape"],
-                "min": payload["min"],
-                "max": payload["max"],
-                "file_path": str(path),
-            }
+        self.writer.write(
+            node_id=spec.node_id,
+            kind=spec.kind,
+            step=self._step,
+            epoch=self._epoch,
+            payload=payload,
         )
-        if self._counts[spec.stream] >= config.PROBE_MAX_PER_STREAM:
-            self._capped.add(spec.stream)
-            self._disabled[spec.stream] = "capped"
-            self._log_warning(
-                "log.probe.capped",
-                {"node_id": spec.node_id, "kind": spec.kind, "limit": config.PROBE_MAX_PER_STREAM},
-            )
 
     def _disable(self, spec: ProbeSpec, message_key: str, args: dict[str, Any] | None = None) -> None:
-        if spec.stream in self._disabled:
-            return
-        self._disabled[spec.stream] = message_key
-        self._log_warning(
-            "log.probe.disabled", {"node_id": spec.node_id, "kind": spec.kind, **(args or {})}
+        self.writer.disable(
+            spec.stream, message_key, {"node_id": spec.node_id, "kind": spec.kind, **(args or {})}
         )
-
-    def _log_warning(self, key: str, args: dict[str, Any]) -> None:
-        self._emit({"type": base.EVENT_LOG, "level": "warning", "key": key, "args": args})

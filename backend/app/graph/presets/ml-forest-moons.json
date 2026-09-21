@@ -1,0 +1,21 @@
+{
+  "ir_version": 1,
+  "id": "ml-forest-moons",
+  "kind": "ml",
+  "task": "binary_classification",
+  "name": { "zh": "随机森林 · 双月", "en": "Random Forest · Moons" },
+  "desc": {
+    "zh": "24 棵自助采样 + 特征随机的小树投票（每步长一棵）：单棵树的硬边界被平均成平滑的软概率场，边缘的“毛刺”随树数增多而收敛",
+    "en": "24 bootstrapped, feature-random trees vote (one tree per step): individual hard boundaries average into a smooth soft-probability field, and the ragged edges settle as trees accumulate"
+  },
+  "dataset_id": "moons",
+  "algo": "random_forest",
+  "params": {
+    "n_estimators": 24,
+    "max_depth": 6,
+    "min_samples_leaf": 3,
+    "feature_fraction": 0.7,
+    "render_delay_ms": 120
+  },
+  "probe_defaults": { "every_n_steps": 1 }
+}

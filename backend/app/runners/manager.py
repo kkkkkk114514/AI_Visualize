@@ -9,19 +9,31 @@ import multiprocessing
 import queue
 import threading
 import time
+from dataclasses import replace
 from datetime import datetime
 from typing import Any
 
 from app import config
+from app.algos import spec as algo_spec
 from app.api.ws import hub
 from app.datasets import registry
-from app.graph.ir import IRParseError, GraphIR, parse_graph, validate_graph
+from app.graph.ir import IRParseError, parse_graph, validate_graph
 from app.metrics import METRIC_NAMES
 from app.probes import hooks as probe_hooks
-from app.runners import base, torch_runner
+from app.runners import base, ml_runner, rl_runner, torch_runner
 from app.store import db, files
 
 log = logging.getLogger(__name__)
+
+# 子进程入口分派（docs/02 §13.4：`Process(target=…)` 是唯一分派点）与 kind → 数据集 loader 匹配
+ALGO_ENTRY: dict[str, Any] = {
+    algo_spec.KIND_ML: ml_runner.entry,
+    algo_spec.KIND_RL: rl_runner.entry,
+}
+ALGO_DATASET_LOADER: dict[str, str] = {
+    algo_spec.KIND_ML: "synth2d",
+    algo_spec.KIND_RL: "gridworld",
+}
 
 
 class RunError(Exception):
@@ -77,14 +89,22 @@ class RunProcess:
         return bool(self.process.is_alive())
 
 
-def _default_name(graph: GraphIR) -> str:
-    text: str | None = None
-    if isinstance(graph.name, dict):
-        text = graph.name.get("zh") or graph.name.get("en")
-    elif isinstance(graph.name, str):
-        text = graph.name
+def _text_name(name: Any) -> str | None:
+    if isinstance(name, dict):
+        return name.get("zh") or name.get("en")
+    return name if isinstance(name, str) else None
+
+
+def _default_name(name: Any, fallback: str) -> str:
     stamp = datetime.now().strftime("%H:%M:%S")
-    return f"{text or graph.id} · {stamp}"
+    return f"{_text_name(name) or fallback} · {stamp}"
+
+
+def _seed_of(body: dict[str, Any]) -> int:
+    value = body.get("seed")
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return int(value)
+    return config.DEFAULT_SEED
 
 
 class RunnerManager:
@@ -142,11 +162,21 @@ class RunnerManager:
         if not isinstance(graph_payload, dict):
             raise RunError(400, "errors.run.needModel", "errors.run.needModel")
 
+        if algo_spec.spec_kind(graph_payload) is not None:
+            return await self._start_algo(graph_payload, model_id, body)
+
         dataset_id = body.get("dataset_id")
         spec = registry.get_spec(dataset_id) if isinstance(dataset_id, str) else None
         if spec is None:
             raise RunError(
                 404, "errors.dataset.notFound", "errors.dataset.notFound", {"id": dataset_id}
+            )
+        if spec.loader == "gridworld":
+            raise RunError(
+                422,
+                "errors.dataset.kindMismatch",
+                "errors.dataset.kindMismatch",
+                {"id": spec.id, "kind": "dl", "expected": "image / text_char / synth2d"},
             )
         if not registry.is_cached(spec):
             raise RunError(
@@ -184,14 +214,13 @@ class RunnerManager:
                 422, "invalid_probe", exc.message_key, exc.error_args, exc.detail
             ) from exc
 
-        seed_value = body.get("seed")
-        seed = (
-            int(seed_value)
-            if isinstance(seed_value, (int, float)) and not isinstance(seed_value, bool)
-            else config.DEFAULT_SEED
-        )
+        seed = _seed_of(body)
         raw_name = body.get("name")
-        name = raw_name.strip() if isinstance(raw_name, str) and raw_name.strip() else _default_name(graph)
+        name = (
+            raw_name.strip()
+            if isinstance(raw_name, str) and raw_name.strip()
+            else _default_name(graph.name, graph.id)
+        )
 
         run_id = db.new_run_id()
         files.ensure_run_dir(run_id)
@@ -231,9 +260,106 @@ class RunnerManager:
             "snapshots_dir": str(files.snapshot_dir(run_id)),
             "probes": probe_payload,
         }
+        return await self._launch(
+            run_id, torch_runner.entry, context, event_queue, control_queue, child_config,
+            f"dataset={spec.id}, device 待定",
+        )
+
+    async def _start_algo(
+        self, graph_payload: dict[str, Any], model_id: Any, body: dict[str, Any]
+    ) -> dict[str, Any]:
+        """ML / RL 启动（契约见 docs/02 §13.4）：spec 校验 → 数据集 kind 匹配 → 单流探针 → 入口分派。"""
+        try:
+            algo = algo_spec.parse_spec(graph_payload)
+        except algo_spec.AlgoSpecError as exc:
+            raise RunError(422, "invalid_algo", exc.message_key, exc.error_args, exc.detail) from exc
+
+        raw_dataset = body.get("dataset_id") or algo.dataset_id
+        dataset = registry.get_spec(raw_dataset) if isinstance(raw_dataset, str) else None
+        if dataset is None:
+            raise RunError(
+                404, "errors.dataset.notFound", "errors.dataset.notFound", {"id": raw_dataset}
+            )
+        expected = ALGO_DATASET_LOADER[algo.kind]
+        if dataset.loader != expected:
+            raise RunError(
+                422,
+                "errors.dataset.kindMismatch",
+                "errors.dataset.kindMismatch",
+                {"id": dataset.id, "kind": algo.kind, "expected": expected},
+            )
+        algo = replace(algo, dataset_id=dataset.id)
+
+        try:
+            probe_specs = algo_spec.resolve_probes(body.get("probes"), algo)
+        except algo_spec.AlgoSpecError as exc:
+            raise RunError(422, "invalid_probe", exc.message_key, exc.error_args, exc.detail) from exc
+
+        seed = _seed_of(body)
+        raw_name = body.get("name")
+        name = (
+            raw_name.strip()
+            if isinstance(raw_name, str) and raw_name.strip()
+            else _default_name(algo.name, algo.id)
+        )
+
+        run_id = db.new_run_id()
+        files.ensure_run_dir(run_id)
+        probe_payload = list(probe_specs)
+        db.insert_run(
+            {
+                "id": run_id,
+                "name": name,
+                "kind": algo.kind,
+                "model_id": str(model_id) if model_id else None,
+                "graph_json": json.dumps(algo.to_dict(), ensure_ascii=False),
+                "dataset_id": dataset.id,
+                # ML / RL 的参数都在 spec 里（docs/02 §7.2 / §13.1），hyperparams 固定为空
+                "hyperparams_json": "{}",
+                "probes_json": json.dumps(probe_payload, ensure_ascii=False),
+                "status": base.STATUS_CREATED,
+                "device": None,
+                "seed": seed,
+                "created_at": db.now_iso(),
+                "started_at": db.now_iso(),
+                "finished_at": None,
+                "error": None,
+                "best_metric": None,
+                "total_steps": 0,
+            }
+        )
+
+        context = multiprocessing.get_context("spawn")
+        event_queue = context.Queue()
+        control_queue = context.Queue()
+        child_config = {
+            "run_id": run_id,
+            "graph": algo.to_dict(),
+            "dataset_id": dataset.id,
+            "hyperparams": {},
+            "seed": seed,
+            "snapshots_dir": str(files.snapshot_dir(run_id)),
+            "probes": probe_payload,
+        }
+        return await self._launch(
+            run_id, ALGO_ENTRY[algo.kind], context, event_queue, control_queue, child_config,
+            f"algo={algo.algo}, dataset={dataset.id}, device=cpu",
+        )
+
+    async def _launch(
+        self,
+        run_id: str,
+        target: Any,
+        context: Any,
+        event_queue: Any,
+        control_queue: Any,
+        child_config: dict[str, Any],
+        note: str,
+    ) -> dict[str, Any]:
+        """拉起子进程、登记活动槽位并广播 `created`；DL 与 ML / RL 两条路共用。"""
         try:
             process = context.Process(
-                target=torch_runner.entry,
+                target=target,
                 args=(child_config, event_queue, control_queue),
                 name=f"run-{run_id}",
                 daemon=True,
@@ -254,7 +380,7 @@ class RunnerManager:
         self._current = run
         run.tasks.append(asyncio.create_task(self._periodic_loop(run)))
         threading.Thread(target=self._reader, args=(run,), name=f"reader-{run_id}", daemon=True).start()
-        log.info("run %s 已启动（dataset=%s, device 待定）", run_id, spec.id)
+        log.info("run %s 已启动（%s）", run_id, note)
         record = db.get_run(run_id)
         await hub.broadcast(
             {
@@ -268,7 +394,6 @@ class RunnerManager:
             }
         )
         return record if record is not None else {"id": run_id, "status": base.STATUS_CREATED}
-
     # ------------------------------------------------------------- 控制
 
     async def control(self, run_id: str, action: str, value: Any = None) -> dict[str, Any]:
