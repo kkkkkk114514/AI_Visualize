@@ -215,6 +215,8 @@ export interface DatasetInfo {
   name: LocalizedText;
   task: string;
   loader: string;
+  /** 上传的数据集（docs/02 §7.5）：只有它们可以删除。 */
+  uploaded: boolean;
   input_shape: number[];
   num_classes: number;
   vocab_size: number | null;

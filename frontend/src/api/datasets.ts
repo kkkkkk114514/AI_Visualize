@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from "./rest";
+import { apiDelete, apiGet, apiPost, apiUpload } from "./rest";
 import type { DatasetInfo, DatasetsResponse, PointsResponse } from "./types";
 
 export async function listDatasets(): Promise<DatasetInfo[]> {
@@ -6,7 +6,7 @@ export async function listDatasets(): Promise<DatasetInfo[]> {
   return payload.datasets;
 }
 
-/** 二维合成点集（docs/02 §13.3）：决策边界画布的散点底图，固定 seed 与后端训练逐位一致。 */
+/** 二维点集（docs/02 §13.3）：合成集与上传的 csv2d 都可用，是决策边界画布的散点底图。 */
 export function fetchDatasetPoints(
   datasetId: string,
   split: "train" | "val" = "train",
@@ -21,4 +21,16 @@ export async function downloadDataset(datasetId: string): Promise<{ started: boo
     `/api/datasets/${encodeURIComponent(datasetId)}/download`,
     {},
   );
+}
+
+/** 上传自定义数据集（docs/02 §7.5）：`.zip` 图片集 / `.csv` 点集 / `.txt` 语料。 */
+export async function uploadDataset(file: File): Promise<DatasetInfo> {
+  const form = new FormData();
+  form.append("file", file, file.name);
+  const payload = await apiUpload<{ dataset: DatasetInfo }>("/api/datasets/upload", form);
+  return payload.dataset;
+}
+
+export async function deleteDataset(datasetId: string): Promise<void> {
+  await apiDelete<{ deleted: string }>(`/api/datasets/${encodeURIComponent(datasetId)}`);
 }

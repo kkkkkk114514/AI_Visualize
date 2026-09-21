@@ -21,7 +21,19 @@
     },
     "empty": "No preset models yet",
     "loadError": "Failed to load the model library",
-    "retry": "Retry"
+    "retry": "Retry",
+    "datasets": {
+      "title": "Datasets",
+      "upload": "Upload dataset",
+      "uploading": "Uploading…",
+      "hint": "Accepts .zip image sets (top-level folders are classes; 2–20 classes, ≥ 8 images each, ≤ 2000 total), .csv point sets (x,y,label, ≥ 20 rows) and .txt corpora (UTF-8, ≥ 2000 chars); uploads are split automatically and show up in the training config.",
+      "empty": "No datasets yet",
+      "delete": "Delete",
+      "deleteConfirm": "Confirm",
+      "cancel": "Cancel",
+      "dismiss": "Dismiss",
+      "loadError": "Failed to load datasets"
+    }
   },
   "lab": {
     "title": "Workbench",
@@ -390,7 +402,17 @@
       "downloading": "Dataset is already downloading",
       "noPoints": "Dataset has no 2-D points: {{id}}",
       "badSplit": "Unknown split: {{split}} (choose {{choices}})",
-      "kindMismatch": "Dataset {{id}} does not match {{kind}} models: it needs {{loader}}"
+      "kindMismatch": "Dataset {{id}} does not match {{kind}} models: it needs {{expected}}",
+      "builtin": "Built-in datasets cannot be deleted: {{id}}",
+      "deleteFailed": "Failed to delete the dataset"
+    },
+    "upload": {
+      "failed": "Upload failed",
+      "noFile": "No file received — pick the file again",
+      "tooLarge": "File too large: {{format}} is capped at {{limit_mb}}MB",
+      "badType": "Unsupported file type: {{ext}} (only .zip / .csv / .txt)",
+      "badContent": "File content does not meet the {{format}} upload requirements",
+      "writeFailed": "Failed to write the dataset: {{id}}"
     },
     "run": {
       "unknown": "Unknown error",

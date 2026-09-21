@@ -39,6 +39,11 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
   });
 }
 
+/** multipart 上传：不设 Content-Type，由浏览器带上 boundary。 */
+export async function apiUpload<T>(path: string, body: FormData): Promise<T> {
+  return request<T>(path, { method: "POST", body });
+}
+
 export async function apiDelete<T>(path: string): Promise<T> {
   return request<T>(path, { method: "DELETE" });
 }

@@ -86,7 +86,12 @@ export function TrainingConfig() {
   const nodes = useGraphStore((state) => state.nodes);
 
   const running = isActiveStatus(status);
-  const dataset = datasets?.find((item) => item.id === datasetId) ?? null;
+  // DL 不吃 gridworld（docs/02 §13.3）：下拉与默认选中都用同一份可用集
+  const choices = useMemo(
+    () => (datasets ?? []).filter((item) => item.loader !== "gridworld"),
+    [datasets],
+  );
+  const dataset = choices.find((item) => item.id === datasetId) ?? null;
   const progress = datasetId ? datasetProgress[datasetId] : undefined;
   const downloading = progress !== undefined && progress.phase !== "done" && progress.phase !== "error";
   const candidates = useMemo(() => probeCandidates(nodes), [nodes]);
@@ -95,6 +100,13 @@ export function TrainingConfig() {
 
   const frozen = (key: keyof RunConfig) =>
     replaying || (running && key !== "lr" && key !== "batch_size");
+
+  // 选中的数据集不在可用集里（被删 / 换成 gridworld）：立刻挪到可用项，避免启动时 kind 不匹配
+  useEffect(() => {
+    if (choices.some((item) => item.id === datasetId)) return;
+    const fallback = choices.find((item) => item.cached) ?? choices[0];
+    if (fallback) setDataset(fallback.id);
+  }, [choices, datasetId, setDataset]);
 
   return (
     <div className="config">
@@ -105,10 +117,10 @@ export function TrainingConfig() {
           <select
             className="config-field__input"
             value={datasetId ?? ""}
-            disabled={replaying || running || !datasets || datasets.length === 0}
+            disabled={replaying || running || choices.length === 0}
             onChange={(event) => setDataset(event.target.value)}
           >
-            {(datasets ?? []).map((item) => (
+            {choices.map((item) => (
               <option key={item.id} value={item.id}>
                 {typeof item.name === "object"
                   ? (i18n.language.startsWith("zh") ? item.name.zh : item.name.en) ?? item.id

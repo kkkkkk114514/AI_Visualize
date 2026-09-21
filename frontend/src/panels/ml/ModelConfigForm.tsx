@@ -6,7 +6,7 @@ import { useRunStore } from "../../stores/runStore";
 import { localizedText } from "../../i18n/localized";
 import { ParamFields } from "../algo/ParamFields";
 
-/** ML 训练配置（docs/02 §13.6）：数据集下拉（synth2d 四项）+ schema 驱动的算法参数表单。 */
+/** ML 训练配置（docs/02 §13.6）：数据集下拉（synth2d / csv2d，含上传的点集）+ schema 驱动的算法参数表单。 */
 export function ModelConfigForm() {
   const { t, i18n } = useTranslation();
   const spec = useAlgoStore((state) => state.spec);
@@ -30,7 +30,10 @@ export function ModelConfigForm() {
   if (!spec) return null;
   const locked = fromRunId !== null;
   const schema = schemas?.[spec.algo] ?? null;
-  const choices = (datasets ?? []).filter((item) => item.loader === "synth2d");
+  // 与后端 ML 的 loader 白名单一致（docs/02 §13.3）：合成点集 + 上传的 csv 点集
+  const choices = (datasets ?? []).filter((item) =>
+    item.loader === "synth2d" || item.loader === "csv2d",
+  );
   const dataset = choices.find((item) => item.id === spec.dataset_id) ?? null;
   const everyN = spec.probe_defaults?.every_n_steps ?? null;
 

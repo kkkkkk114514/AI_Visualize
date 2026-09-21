@@ -21,7 +21,19 @@
     },
     "empty": "暂无预置模型",
     "loadError": "模型库加载失败",
-    "retry": "重试"
+    "retry": "重试",
+    "datasets": {
+      "title": "数据集",
+      "upload": "上传数据集",
+      "uploading": "上传中…",
+      "hint": "支持 .zip 图片集（顶层文件夹名为类别，2–20 类、每类 ≥ 8 张、总数 ≤ 2000 张）、.csv 点集（x,y,label 三列、≥ 20 行）、.txt 语料（UTF-8、≥ 2000 字符）；上传后自动切分并出现在训练配置里。",
+      "empty": "暂无数据集",
+      "delete": "删除",
+      "deleteConfirm": "确认删除",
+      "cancel": "取消",
+      "dismiss": "关闭",
+      "loadError": "数据集加载失败"
+    }
   },
   "lab": {
     "title": "工作台",
@@ -390,7 +402,17 @@
       "downloading": "数据集正在下载中",
       "noPoints": "该数据集没有二维点集：{{id}}",
       "badSplit": "未知的数据划分：{{split}}（可选 {{choices}}）",
-      "kindMismatch": "数据集 {{id}} 与模型类别 {{kind}} 不匹配：该类别需要 {{expected}}"
+      "kindMismatch": "数据集 {{id}} 与模型类别 {{kind}} 不匹配：该类别需要 {{expected}}",
+      "builtin": "内置数据集不可删除：{{id}}",
+      "deleteFailed": "删除数据集失败"
+    },
+    "upload": {
+      "failed": "上传失败",
+      "noFile": "没有收到文件：请重新选择",
+      "tooLarge": "文件过大：{{format}} 上限 {{limit_mb}}MB",
+      "badType": "不支持的文件类型：{{ext}}（仅 .zip / .csv / .txt）",
+      "badContent": "文件内容不符合 {{format}} 上传要求",
+      "writeFailed": "数据集写入失败：{{id}}"
     },
     "run": {
       "unknown": "未知错误",
