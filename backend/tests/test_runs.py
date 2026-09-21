@@ -277,3 +277,45 @@ def test_orphan_runs_marked_interrupted(client: TestClient) -> None:
     assert run_id in orphans
     assert db.get_run(run_id)["status"] == "interrupted"
     db.delete_run(run_id)
+
+
+# ------------------------------------------------------------------ M4 历史与清理
+
+
+def test_storage_and_clear_history(client: TestClient) -> None:
+    # 自给自足造两条：一条已结束（待清理）、一条活动（清理时应被跳过）
+    done_id = start_run(
+        client, hyperparams={**SMALL_HYPER, "epochs": 1, "train_size": 320, "val_size": 64}
+    )
+    finished = wait_for(client, done_id, lambda run: run["status"] in ("finished", "failed"))
+    assert finished["status"] == "finished", finished
+    active_id = start_run(client)
+    wait_for(client, active_id, lambda run: run["step"] >= 1)
+
+    stats = client.get("/api/runs/storage")
+    assert stats.status_code == 200, stats.text
+    storage = stats.json()
+    listed = [item["id"] for item in client.get("/api/runs", params={"limit": 200}).json()["runs"]]
+    assert storage["run_count"] == len(listed) >= 2
+    assert set(storage["by_run"]) == set(listed)
+    assert storage["total_bytes"] == sum(storage["by_run"].values()) > 0
+    assert storage["runs_dir"].endswith("runs")
+
+    others = [run_id for run_id in listed if run_id != active_id]
+    cleared = client.delete("/api/runs")
+    assert cleared.status_code == 200, cleared.text
+    payload = cleared.json()
+    assert payload["deleted"] == len(others)
+    assert payload["kept_active"] == active_id
+
+    remaining = client.get("/api/runs", params={"limit": 200}).json()
+    assert [item["id"] for item in remaining["runs"]] == [active_id]
+    assert all(not files.run_dir(run_id).exists() for run_id in others)
+    assert db.get_run(others[0]) is None
+    after = client.get("/api/runs/storage").json()
+    assert after["run_count"] == 1
+    assert set(after["by_run"]) == {active_id}
+
+    # 活动 run 本身仍可控制
+    assert client.post(f"/api/runs/{active_id}/control", json={"action": "pause"}).status_code == 200
+    stop_run(client, active_id)

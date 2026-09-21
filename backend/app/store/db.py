@@ -205,6 +205,13 @@ def count_runs() -> int:
     return int(row["n"])
 
 
+def all_run_ids() -> list[str]:
+    """全部 run id（占用统计与「清理全部历史」用，不受分页限制）。"""
+    with _lock:
+        rows = connect().execute("SELECT id FROM runs ORDER BY created_at DESC, rowid DESC").fetchall()
+    return [row["id"] for row in rows]
+
+
 def delete_run(run_id: str) -> bool:
     with _lock:
         conn = connect()

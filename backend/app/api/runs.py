@@ -85,6 +85,22 @@ async def list_runs(limit: int = 20, offset: int = 0) -> dict[str, Any]:
     return {"runs": [_summary(record) for record in records], "total": db.count_runs()}
 
 
+@router.get("/storage")
+async def storage_stats() -> dict[str, Any]:
+    """历史占用统计（docs/02 §8.1）：run 目录之和，不含数据集缓存。
+
+    注册顺序在 `/{run_id}` 之前，否则 "storage" 会被当成 run_id 匹配。
+    """
+    run_ids = db.all_run_ids()
+    by_run = {run_id: files.dir_size(files.run_dir(run_id)) for run_id in run_ids}
+    return {
+        "run_count": len(run_ids),
+        "total_bytes": sum(by_run.values()),
+        "by_run": by_run,
+        "runs_dir": str(config.RUNS_DIR),
+    }
+
+
 @router.get("/{run_id}")
 async def get_run(run_id: str) -> Any:
     record = db.get_run(run_id)
@@ -167,6 +183,23 @@ def _etag_matches(header: str | None, etag: str) -> bool:
         return False
     candidates = [item.strip() for item in header.split(",")]
     return etag in candidates or f"W/{etag}" in candidates or "*" in candidates
+
+
+@router.delete("")
+async def clear_runs() -> dict[str, Any]:
+    """清理全部历史（docs/02 §8.1）：跳过活动 run，逐条删除文件与 DB 行并广播。"""
+    deleted: list[str] = []
+    kept_active: str | None = None
+    for run_id in db.all_run_ids():
+        if manager.live_info(run_id) is not None:
+            kept_active = run_id
+            continue
+        files.remove_run_dir(run_id)
+        db.delete_run(run_id)
+        deleted.append(run_id)
+    for run_id in deleted:
+        await hub.broadcast({"type": base.WIRE_DELETED, "run_id": run_id})
+    return {"deleted": len(deleted), "kept_active": kept_active}
 
 
 @router.delete("/{run_id}")
