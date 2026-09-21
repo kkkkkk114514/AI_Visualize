@@ -53,17 +53,26 @@ export function ProbeViewer() {
   const runId = useRunStore((state) => state.snapshotRunId);
   const snapshots = useRunStore((state) => state.snapshots);
   const streamKey = useRunStore((state) => state.probeStream);
-  const cursor = useRunStore((state) => state.probeCursor);
+  const cursorStep = useRunStore((state) => state.cursorStep);
   const probeCount = useRunStore((state) => state.probeChoices.length);
   const probeEveryN = useRunStore((state) => state.probeEveryN);
   const setProbeStream = useRunStore((state) => state.setProbeStream);
-  const setProbeCursor = useRunStore((state) => state.setProbeCursor);
+  const setCursorStep = useRunStore((state) => state.setCursorStep);
   const [colormap, setColormap] = useState<ColormapName>("viridis");
 
   const streams = useMemo(() => Object.keys(snapshots), [snapshots]);
   const list = streamKey ? (snapshots[streamKey] ?? []) : [];
-  const latest = list.length - 1;
-  const index = cursor === null ? latest : Math.min(Math.max(cursor, 0), latest);
+  // 游标（step）→ 快照下标：取 ≤ 游标的最近一条；游标早于第一条时取第一条（docs/02 §9.2「时间游标与回放」）
+  const index = useMemo(() => {
+    if (list.length === 0) return -1;
+    if (cursorStep === null) return list.length - 1;
+    let found = 0;
+    for (let i = 0; i < list.length; i += 1) {
+      if (list[i].step <= cursorStep) found = i;
+      else break;
+    }
+    return found;
+  }, [list, cursorStep]);
   const meta = index >= 0 ? list[index] : null;
   const stream = streamKey ? parseStreamKey(streamKey) : null;
   const { payload, stale, error } = useSnapshotPayload(runId, meta?.id ?? null);
@@ -92,16 +101,16 @@ export function ProbeViewer() {
 
         <select
           className="probe__select probe__select--step"
-          value={cursor === null ? "" : String(index)}
+          value={cursorStep === null ? "" : meta ? String(meta.step) : ""}
           disabled={list.length === 0}
           onChange={(event) =>
-            setProbeCursor(event.target.value === "" ? null : Number(event.target.value))
+            setCursorStep(event.target.value === "" ? null : Number(event.target.value))
           }
           title={t("run.probe.stepHint")}
         >
           <option value="">{t("run.probe.followLatest")}</option>
-          {list.map((item, position) => (
-            <option key={item.id} value={position}>
+          {list.map((item) => (
+            <option key={item.id} value={String(item.step)}>
               {`step ${item.step}${item.epoch ? ` · e${item.epoch}` : ""}`}
             </option>
           ))}

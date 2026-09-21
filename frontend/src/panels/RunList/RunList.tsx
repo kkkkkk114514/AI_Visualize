@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { RunSummary } from "../../api/types";
@@ -23,20 +23,39 @@ function formatDuration(run: RunSummary): string {
   return "—";
 }
 
+function formatBytes(bytes: number | null | undefined): string {
+  if (!bytes || bytes <= 0) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(1)} KB`;
+  return `${(kb / 1024).toFixed(1)} MB`;
+}
+
+/** 删除 / 清理都要两步确认（docs/02 §9.2「历史 run 面板」）。 */
+type Confirm = { kind: "one"; id: string } | { kind: "all" } | null;
+
 export function RunList() {
   const { t } = useTranslation();
   const history = useRunStore((state) => state.history);
   const historyTotal = useRunStore((state) => state.historyTotal);
   const historyError = useRunStore((state) => state.historyError);
+  const storage = useRunStore((state) => state.storage);
   const currentId = useRunStore((state) => state.current?.id ?? null);
   const replayId = useRunStore((state) => state.replay?.id ?? null);
   const loadHistory = useRunStore((state) => state.loadHistory);
   const selectRun = useRunStore((state) => state.selectRun);
   const removeRun = useRunStore((state) => state.removeRun);
+  const clearHistory = useRunStore((state) => state.clearHistory);
+  const [confirm, setConfirm] = useState<Confirm>(null);
 
   useEffect(() => {
     void loadHistory();
   }, [loadHistory]);
+
+  // 列表刷新后，指向已消失 run 的确认态自动失效
+  useEffect(() => {
+    if (confirm?.kind === "one" && !history.some((item) => item.id === confirm.id)) setConfirm(null);
+  }, [history, confirm]);
 
   if (historyError) {
     return (
@@ -46,66 +65,121 @@ export function RunList() {
     );
   }
 
-  if (history.length === 0) {
-    return (
-      <div className="runs">
-        <div className="runs__empty">{t("run.list.empty")}</div>
-      </div>
-    );
-  }
+  const clearable = history.filter((run) => !isActiveStatus(run.status)).length;
 
   return (
     <div className="runs">
-      <ul className="runs__list">
-        {history.map((run) => {
-          const selected = run.id === replayId || run.id === currentId;
-          return (
-            <li
-              key={run.id}
-              className={`runs__row ${selected ? "runs__row--selected" : ""}`}
-              onClick={() => void selectRun(run.id)}
-            >
-              <div className="runs__head">
-                <span className="runs__name" title={run.id}>
-                  {run.name}
-                </span>
-                <span className={`run-state run-state--${run.status}`}>{t(`run.status.${run.status}`)}</span>
-              </div>
-              <div className="runs__meta">
-                <span>{run.dataset_id}</span>
-                <span>
-                  {t("run.metrics.best")} {run.best_metric === null ? "—" : run.best_metric.toFixed(4)}
-                </span>
-                <span>
-                  {t("run.metrics.step")} {run.total_steps}
-                </span>
-                <span>{formatDuration(run)}</span>
-                <span>
-                  {t("run.list.finishedAt")} {run.finished_at ? formatTime(run.finished_at) : "—"}
-                </span>
-              </div>
-              <div className="runs__actions">
-                {isActiveStatus(run.status) ? (
-                  <span className="runs__live">{t("run.list.live")}</span>
-                ) : (
-                  <button
-                    type="button"
-                    className="btn btn--ghost runs__delete"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void removeRun(run.id);
-                    }}
-                  >
-                    {t("run.list.delete")}
-                  </button>
-                )}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+      {history.length === 0 ? (
+        <div className="runs__empty">{t("run.list.empty")}</div>
+      ) : (
+        <ul className="runs__list">
+          {history.map((run) => {
+            const selected = run.id === replayId || run.id === currentId;
+            const confirming = confirm?.kind === "one" && confirm.id === run.id;
+            return (
+              <li
+                key={run.id}
+                className={`runs__row ${selected ? "runs__row--selected" : ""}`}
+                onClick={() => void selectRun(run.id)}
+              >
+                <div className="runs__head">
+                  <span className="runs__name" title={run.id}>
+                    {run.name}
+                  </span>
+                  <span className={`run-state run-state--${run.status}`}>{t(`run.status.${run.status}`)}</span>
+                </div>
+                <div className="runs__meta">
+                  <span>{run.dataset_id}</span>
+                  <span>
+                    {t("run.metrics.best")} {run.best_metric === null ? "—" : run.best_metric.toFixed(4)}
+                  </span>
+                  <span>
+                    {t("run.metrics.step")} {run.total_steps}
+                  </span>
+                  <span>{formatDuration(run)}</span>
+                  <span>{t("run.list.storage", { size: formatBytes(storage?.by_run[run.id]) })}</span>
+                  <span>
+                    {t("run.list.finishedAt")} {run.finished_at ? formatTime(run.finished_at) : "—"}
+                  </span>
+                </div>
+                <div className="runs__actions">
+                  {isActiveStatus(run.status) ? (
+                    <span className="runs__live">{t("run.list.live")}</span>
+                  ) : confirming ? (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn--danger runs__delete"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setConfirm(null);
+                          void removeRun(run.id);
+                        }}
+                      >
+                        {t("run.list.deleteConfirm")}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--ghost runs__delete"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setConfirm(null);
+                        }}
+                      >
+                        {t("run.list.cancel")}
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn--ghost runs__delete"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setConfirm({ kind: "one", id: run.id });
+                      }}
+                    >
+                      {t("run.list.delete")}
+                    </button>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
       <div className="runs__footer">
-        {t("run.list.count", { count: history.length, total: historyTotal })}
+        <span>{t("run.list.count", { count: history.length, total: historyTotal })}</span>
+        <span className="runs__disk" title={storage?.runs_dir}>
+          {t("run.list.storage", { size: formatBytes(storage?.total_bytes) })}
+        </span>
+        <span className="runs__footer-actions">
+          {confirm?.kind === "all" ? (
+            <>
+              <button
+                type="button"
+                className="btn btn--danger runs__delete"
+                onClick={() => {
+                  setConfirm(null);
+                  void clearHistory();
+                }}
+              >
+                {t("run.list.clearConfirm", { n: clearable })}
+              </button>
+              <button type="button" className="btn btn--ghost runs__delete" onClick={() => setConfirm(null)}>
+                {t("run.list.cancel")}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="btn btn--ghost runs__delete"
+              disabled={clearable === 0}
+              onClick={() => setConfirm({ kind: "all" })}
+            >
+              {t("run.list.clear")}
+            </button>
+          )}
+        </span>
       </div>
     </div>
   );

@@ -2,7 +2,16 @@ import { create } from "zustand";
 
 import { downloadDataset, listDatasets } from "../api/datasets";
 import { ApiError } from "../api/rest";
-import { controlRun, deleteRun, fetchRunMetrics, getRun, listRuns, startRun } from "../api/runs";
+import {
+  clearRunHistory,
+  controlRun,
+  deleteRun,
+  fetchRunMetrics,
+  fetchRunStorage,
+  getRun,
+  listRuns,
+  startRun,
+} from "../api/runs";
 import { clearSnapshotCache, listSnapshots } from "../api/snapshots";
 import type {
   DatasetInfo,
@@ -11,6 +20,9 @@ import type {
   ProbeKind,
   ProbeSpec,
   RunStatus,
+  RunStorage,
+  RunDetail,
+  RunHyperparams,
   RunSummary,
   ServerEvent,
   SnapshotMeta,
@@ -59,10 +71,16 @@ class MetricsBuffer {
     this.steps = [];
     this.columns.clear();
     for (const name of METRIC_NAMES) this.columns.set(name, []);
+    // 清空也要通知：图表订阅者据此清掉旧 run 的曲线与「空」标记
+    this.listeners.forEach((listener) => listener());
   }
 
   get length(): number {
     return this.steps.length;
+  }
+
+  firstStep(): number | null {
+    return this.steps.length === 0 ? null : this.steps[0];
   }
 
   lastStep(): number | null {
@@ -220,7 +238,8 @@ interface RunState {
   datasetProgress: Record<string, DatasetProgress>;
   config: RunConfig;
   current: RunSummary | null;
-  replay: RunSummary | null;
+  /** 回放中的 run 详情（含 `graph`，供只读恢复图结构；docs/02 §9.2「回放模式」） */
+  replay: RunDetail | null;
   status: RunStatus;
   step: number;
   epoch: number;
@@ -242,8 +261,14 @@ interface RunState {
   snapshots: Record<string, SnapshotMeta[]>;
   snapshotRunId: string | null;
   probeStream: string | null;
-  /** null = 跟随最新采样步；数字为 `snapshots[probeStream]` 的下标（回放步选择器） */
-  probeCursor: number | null;
+  /** 曲线与探针共用的时间游标（step）；null = 跟随最新（docs/02 §9.2「时间游标与回放」） */
+  cursorStep: number | null;
+  /** 指标缓冲当前承载的 run：曲线数据源标注与 WS 指标归属都看它，避免跨 run 混数据 */
+  metricsRunId: string | null;
+  /** 历史 run 的磁盘占用（docs/02 §8.1） */
+  storage: RunStorage | null;
+  /** 回放详情加载中：URL 指定的回放不被「自动选中最新 run」抢占 */
+  replayLoading: boolean;
 
   loadDatasets: () => Promise<void>;
   downloadDataset: (datasetId: string) => Promise<void>;
@@ -255,7 +280,7 @@ interface RunState {
   setProbeKind: (nodeId: string, kind: ProbeKind) => void;
   setProbeEveryN: (everyN: number) => void;
   setProbeStream: (stream: string | null) => void;
-  setProbeCursor: (cursor: number | null) => void;
+  setCursorStep: (step: number | null) => void;
   start: (graph: unknown, modelId?: string) => Promise<void>;
   pause: () => Promise<void>;
   resume: () => Promise<void>;
@@ -263,6 +288,8 @@ interface RunState {
   applyLr: (lr: number) => Promise<void>;
   applyBatchSize: (size: number) => Promise<void>;
   loadHistory: () => Promise<void>;
+  loadStorage: () => Promise<void>;
+  clearHistory: () => Promise<void>;
   selectRun: (runId: string | null) => Promise<void>;
   removeRun: (runId: string) => Promise<void>;
   attachRun: (runId: string) => Promise<void>;
@@ -308,6 +335,16 @@ function errorState(error: unknown, fallbackKey = "errors.run.unknown"): RunErro
   };
 }
 
+/** 回放时把该 run 的超参回显到训练配置（只读展示，docs/02 §9.2「回放模式」）。 */
+function configFromHyperparams(hyperparams: RunHyperparams | null | undefined): RunConfig {
+  const patch: Partial<RunConfig> = {};
+  for (const key of Object.keys(DEFAULT_RUN_CONFIG) as (keyof RunConfig)[]) {
+    const value = hyperparams?.[key];
+    if (value !== undefined && value !== null) patch[key] = value as never;
+  }
+  return { ...DEFAULT_RUN_CONFIG, ...patch };
+}
+
 export const useRunStore = create<RunState>((set, get) => {
   const pushLog = (entry: LogEntry) => {
     set((state) => ({ logs: [...state.logs, entry].slice(-200) }));
@@ -351,7 +388,7 @@ export const useRunStore = create<RunState>((set, get) => {
       snapshots: {},
       snapshotRunId: run.id,
       probeStream: choices.length > 0 ? probeStreamKey(choices[0]) : null,
-      probeCursor: null,
+      cursorStep: null,
     });
   };
 
@@ -365,7 +402,6 @@ export const useRunStore = create<RunState>((set, get) => {
         snapshots: grouped,
         // 勾选的首条流即使还没采样到也保持选中；否则退到第一个有数据的流
         probeStream: state.probeStream ?? firstStream(grouped),
-        probeCursor: null,
       }));
     } catch {
       // 索引拉取失败不影响其余面板：实时事件仍会补上快照
@@ -399,7 +435,10 @@ export const useRunStore = create<RunState>((set, get) => {
     snapshots: {},
     snapshotRunId: null,
     probeStream: null,
-    probeCursor: null,
+    cursorStep: null,
+    metricsRunId: null,
+    storage: null,
+    replayLoading: false,
 
     loadDatasets: async () => {
       try {
@@ -493,9 +532,10 @@ export const useRunStore = create<RunState>((set, get) => {
 
     setProbeEveryN: (everyN) => set({ probeEveryN: Math.max(1, Math.round(everyN)) }),
 
-    setProbeStream: (stream) => set({ probeStream: stream, probeCursor: null }),
+    // 游标按 step 记（与流无关），换流不重置：切换 (节点, kind) 后仍停在同一步
+    setProbeStream: (stream) => set({ probeStream: stream }),
 
-    setProbeCursor: (cursor) => set({ probeCursor: cursor }),
+    setCursorStep: (step) => set({ cursorStep: step }),
 
     start: async (graph, modelId) => {
       const state = get();
@@ -527,8 +567,9 @@ export const useRunStore = create<RunState>((set, get) => {
           starting: false,
           snapshots: {},
           snapshotRunId: run.id,
+          metricsRunId: run.id,
           probeStream: probes.length > 0 ? probeStreamKey(state.probeChoices[0]) : null,
-          probeCursor: null,
+          cursorStep: null,
         });
         pushLog({ id: logSeq++, level: "info", key: "log.run.queued", args: {}, at: Date.now() });
         void get().loadHistory();
@@ -610,14 +651,58 @@ export const useRunStore = create<RunState>((set, get) => {
       try {
         const payload = await listRuns(50, 0);
         set({ history: payload.runs, historyTotal: payload.total, historyError: null });
+        void get().loadStorage();
       } catch (error) {
         set({ historyError: error instanceof Error ? error.message : String(error) });
       }
     },
 
+    loadStorage: async () => {
+      try {
+        set({ storage: await fetchRunStorage() });
+      } catch {
+        // 占用统计拿不到不影响历史列表本身
+      }
+    },
+
+    clearHistory: async () => {
+      try {
+        await clearRunHistory();
+      } catch (error) {
+        set({ runError: errorState(error, "errors.run.deleteFailed") });
+        return;
+      }
+      const state = get();
+      // 被清理的 run 若正是曲线 / 探针当前承载的，一并清空；活动 run 保留
+      await get().loadHistory();
+      const remaining = get().history;
+      const stillThere = (runId: string | null) =>
+        runId !== null && remaining.some((item) => item.id === runId);
+      const bufferDied = state.metricsRunId !== null && !stillThere(state.metricsRunId);
+      const snapshotDied = state.snapshotRunId !== null && !stillThere(state.snapshotRunId);
+      if (bufferDied) metricsBuffer.reset();
+      if (snapshotDied) clearSnapshotCache();
+      set({
+        replay: stillThere(state.replay?.id ?? null) ? state.replay : null,
+        metricsRunId: bufferDied ? null : state.metricsRunId,
+        snapshotRunId: snapshotDied ? null : state.snapshotRunId,
+        snapshots: snapshotDied ? {} : state.snapshots,
+        probeStream: snapshotDied ? null : state.probeStream,
+        cursorStep: snapshotDied ? null : state.cursorStep,
+      });
+    },
+
     selectRun: async (runId) => {
       if (runId === null) {
-        set({ replay: null, snapshots: {}, snapshotRunId: null, probeStream: null, probeCursor: null });
+        set({
+          replay: null,
+          replayLoading: false,
+          snapshots: {},
+          snapshotRunId: null,
+          probeStream: null,
+          cursorStep: null,
+          metricsRunId: null,
+        });
         metricsBuffer.reset();
         clearSnapshotCache();
         return;
@@ -625,33 +710,59 @@ export const useRunStore = create<RunState>((set, get) => {
       const known = get().history.find((item) => item.id === runId) ?? null;
       if (known && isActiveStatus(known.status)) {
         await get().attachRun(runId);
+        set({ replay: null });
         return;
       }
-      set({ replay: known });
+      set({ replay: known, replayLoading: true });
       try {
         const [detail, metrics] = await Promise.all([getRun(runId), fetchRunMetrics(runId)]);
-        set({ replay: detail });
         metricsBuffer.loadSeries(metrics.series);
         adoptRunProbes(detail);
+        set((state) => ({
+          replay: detail,
+          replayLoading: false,
+          metricsRunId: runId,
+          // 回放回显该 run 的 dataset 与超参（面板锁定编辑，docs/02 §9.2「回放模式」）
+          config: configFromHyperparams(detail.hyperparams),
+          datasetId: detail.dataset_id ?? state.datasetId,
+        }));
         await loadSnapshots(runId);
       } catch (error) {
-        set({ runError: errorState(error, "errors.run.loadFailed") });
+        const current = get().replay;
+        set({
+          replayLoading: false,
+          // 失败时丢掉指向该 run 的回放态（含从列表乐观带出的 summary，它没有 graph）；
+          // 仍在回放别的 run 时保持不动，无效的 `?run=` 由 URL 同步 effect 清掉。
+          replay: current && current.id !== runId ? current : null,
+          runError: errorState(error, "errors.run.loadFailed"),
+        });
       }
     },
 
     removeRun: async (runId) => {
       try {
         await deleteRun(runId);
-        set((state) => ({
-          history: state.history.filter((item) => item.id !== runId),
-          historyTotal: Math.max(0, state.historyTotal - 1),
-          replay: state.replay?.id === runId ? null : state.replay,
-          snapshots: state.snapshotRunId === runId ? {} : state.snapshots,
-          snapshotRunId: state.snapshotRunId === runId ? null : state.snapshotRunId,
-        }));
       } catch (error) {
         set({ runError: errorState(error, "errors.run.deleteFailed") });
+        return;
       }
+      const state = get();
+      const wasReplay = state.replay?.id === runId;
+      const bufferDied = state.metricsRunId === runId;
+      const snapshotDied = state.snapshotRunId === runId;
+      if (bufferDied) metricsBuffer.reset();
+      if (snapshotDied) clearSnapshotCache();
+      set({
+        history: state.history.filter((item) => item.id !== runId),
+        historyTotal: Math.max(0, state.historyTotal - 1),
+        replay: wasReplay ? null : state.replay,
+        snapshots: snapshotDied ? {} : state.snapshots,
+        snapshotRunId: snapshotDied ? null : state.snapshotRunId,
+        probeStream: snapshotDied ? null : state.probeStream,
+        cursorStep: snapshotDied ? null : state.cursorStep,
+        metricsRunId: bufferDied ? null : state.metricsRunId,
+      });
+      void get().loadStorage();
     },
 
     attachRun: async (runId) => {
@@ -659,10 +770,11 @@ export const useRunStore = create<RunState>((set, get) => {
         const detail = await getRun(runId);
         wsClient.subscribe(runId);
         applySummary(detail);
-        set({ replay: null, runError: null, logs: [] });
+        set({ runError: null, logs: [] });
         adoptRunProbes(detail);
         const metrics = await fetchRunMetrics(runId);
         metricsBuffer.loadSeries(metrics.series);
+        set({ metricsRunId: runId });
         await loadSnapshots(runId);
       } catch (error) {
         set({ runError: errorState(error, "errors.run.loadFailed") });
@@ -674,6 +786,20 @@ export const useRunStore = create<RunState>((set, get) => {
       await get().loadHistory();
       const history = get().history;
       const active = history.find((item) => isActiveStatus(item.status));
+      // 回放优先：URL 指定的回放（已选中 / 加载中）不被「自动选中最新 run」抢占，
+      // 此时活动 run 只同步 REST 状态与订阅，不动曲线缓冲与探针（docs/02 §9.2「回放模式」）。
+      if (get().replay || get().replayLoading) {
+        if (active) {
+          try {
+            const detail = await getRun(active.id);
+            wsClient.subscribe(active.id);
+            applySummary(detail);
+          } catch {
+            // 状态同步失败下个事件周期仍会补上
+          }
+        }
+        return;
+      }
       if (active) {
         await get().attachRun(active.id);
         return;
@@ -738,23 +864,25 @@ export const useRunStore = create<RunState>((set, get) => {
       }
 
       if (event.type === "metrics" && runId) {
-        const owner = state.current?.id === runId || state.replay?.id === runId;
-        if (!owner) return;
+        // 归属看缓冲当前承载的 run：已挂 run A + 回看 run B 时，A 的点不会混进 B 的曲线
+        if (state.metricsRunId !== runId) return;
         const points = Array.isArray(event.points) ? (event.points as MetricPoint[]) : [];
         if (points.length > 0) {
           metricsBuffer.push(points);
-          const last = points[points.length - 1];
-          set({
-            step: Math.max(state.step, Number(last.step ?? 0)),
-            epoch: Number(last.epoch ?? state.epoch),
-          });
+          if (state.current?.id === runId) {
+            const last = points[points.length - 1];
+            set({
+              step: Math.max(state.step, Number(last.step ?? 0)),
+              epoch: Number(last.epoch ?? state.epoch),
+            });
+          }
         }
         return;
       }
 
       if (event.type === "probe.snapshot" && runId) {
-        const owner = state.current?.id === runId || state.replay?.id === runId;
-        if (!owner) return;
+        // 同理：只收探针面板当前承载 run（snapshotRunId）的快照
+        if (state.snapshotRunId !== runId) return;
         const nodeId = typeof event.node_id === "string" ? event.node_id : null;
         const kind = event.kind as ProbeKind | undefined;
         const snapshotId = typeof event.snapshot_id === "string" ? event.snapshot_id : null;
@@ -830,10 +958,21 @@ export const useRunStore = create<RunState>((set, get) => {
       }
 
       if (event.type === "run.deleted" && runId) {
-        set((current) => ({
-          history: current.history.filter((item) => item.id !== runId),
-          replay: current.replay?.id === runId ? null : current.replay,
-        }));
+        const bufferDied = state.metricsRunId === runId;
+        const snapshotDied = state.snapshotRunId === runId;
+        if (bufferDied) metricsBuffer.reset();
+        if (snapshotDied) clearSnapshotCache();
+        set({
+          history: state.history.filter((item) => item.id !== runId),
+          historyTotal: Math.max(0, state.historyTotal - 1),
+          replay: state.replay?.id === runId ? null : state.replay,
+          snapshots: snapshotDied ? {} : state.snapshots,
+          snapshotRunId: snapshotDied ? null : state.snapshotRunId,
+          probeStream: snapshotDied ? null : state.probeStream,
+          cursorStep: snapshotDied ? null : state.cursorStep,
+          metricsRunId: bufferDied ? null : state.metricsRunId,
+        });
+        void get().loadStorage();
       }
     },
   };

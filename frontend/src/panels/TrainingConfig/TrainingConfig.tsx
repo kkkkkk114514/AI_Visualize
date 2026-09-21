@@ -81,6 +81,8 @@ export function TrainingConfig() {
   const toggleProbe = useRunStore((state) => state.toggleProbe);
   const setProbeKind = useRunStore((state) => state.setProbeKind);
   const setProbeEveryN = useRunStore((state) => state.setProbeEveryN);
+  const replay = useRunStore((state) => state.replay);
+  const replayLoading = useRunStore((state) => state.replayLoading);
   const nodes = useGraphStore((state) => state.nodes);
 
   const running = isActiveStatus(status);
@@ -88,9 +90,11 @@ export function TrainingConfig() {
   const progress = datasetId ? datasetProgress[datasetId] : undefined;
   const downloading = progress !== undefined && progress.phase !== "done" && progress.phase !== "error";
   const candidates = useMemo(() => probeCandidates(nodes), [nodes]);
+  // 回放中整体锁定：面板回显的是该 run 的 dataset / 超参 / 探针，改了会张冠李戴（docs/02 §9.2「回放模式」）
+  const replaying = replay !== null || replayLoading;
 
   const frozen = (key: keyof RunConfig) =>
-    running && key !== "lr" && key !== "batch_size";
+    replaying || (running && key !== "lr" && key !== "batch_size");
 
   return (
     <div className="config">
@@ -101,7 +105,7 @@ export function TrainingConfig() {
           <select
             className="config-field__input"
             value={datasetId ?? ""}
-            disabled={running || !datasets || datasets.length === 0}
+            disabled={replaying || running || !datasets || datasets.length === 0}
             onChange={(event) => setDataset(event.target.value)}
           >
             {(datasets ?? []).map((item) => (
@@ -129,7 +133,7 @@ export function TrainingConfig() {
           </div>
         ) : null}
 
-        {dataset && !dataset.cached && !downloading ? (
+        {dataset && !dataset.cached && !downloading && !replaying ? (
           <div className="config__row">
             <button type="button" className="btn" onClick={() => void downloadDataset(dataset.id)}>
               {t("run.dataset.download")}
@@ -191,7 +195,8 @@ export function TrainingConfig() {
             step={0.0001}
             min={1e-6}
             max={1}
-            hint={running ? t("run.hyper.lrLive") : undefined}
+            disabled={frozen("lr")}
+            hint={replaying ? t("run.replayLockedHint") : running ? t("run.hyper.lrLive") : undefined}
             onCommit={(value) => void applyLr(value)}
           />
           <NumberField
@@ -200,7 +205,8 @@ export function TrainingConfig() {
             step={1}
             min={1}
             max={4096}
-            hint={running ? t("run.hyper.batchLive") : undefined}
+            disabled={frozen("batch_size")}
+            hint={replaying ? t("run.replayLockedHint") : running ? t("run.hyper.batchLive") : undefined}
             onCommit={(value) => void applyBatchSize(value)}
           />
           <NumberField
@@ -241,7 +247,9 @@ export function TrainingConfig() {
             onCommit={(value) => setConfig({ val_size: Math.round(value) })}
           />
         </div>
-        {running ? (
+        {replaying ? (
+          <div className="config__hint">{t("run.replayLockedHint")}</div>
+        ) : running ? (
           <div className="config__hint">{t("run.hyper.lockedHint", { run: runId ?? "" })}</div>
         ) : null}
       </div>
@@ -257,7 +265,7 @@ export function TrainingConfig() {
                   <input
                     type="checkbox"
                     checked={Boolean(choice)}
-                    disabled={running}
+                    disabled={running || replaying}
                     onChange={() => toggleProbe(candidate.nodeId, candidate.kinds[0])}
                   />
                   <span className="probe-pick__name">{candidate.nodeId}</span>
@@ -267,7 +275,7 @@ export function TrainingConfig() {
                   <select
                     className="probe-pick__kind"
                     value={choice.kind}
-                    disabled={running}
+                    disabled={running || replaying}
                     onChange={(event) =>
                       setProbeKind(candidate.nodeId, event.target.value as typeof choice.kind)
                     }
@@ -290,14 +298,18 @@ export function TrainingConfig() {
             step={10}
             min={1}
             max={100000}
-            disabled={running}
+            disabled={running || replaying}
             hint={t("run.probe.everyNHint")}
             onCommit={setProbeEveryN}
           />
           <span className="config__meta">{t("run.probe.picked", { n: probeChoices.length })}</span>
         </div>
         <div className="config__hint">
-          {running ? t("run.probe.lockedHint") : t("run.probe.hint")}
+          {replaying
+            ? t("run.probe.replayHint")
+            : running
+              ? t("run.probe.lockedHint")
+              : t("run.probe.hint")}
         </div>
       </div>
     </div>

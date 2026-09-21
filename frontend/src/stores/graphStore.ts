@@ -15,6 +15,9 @@ interface Snapshot {
   edges: FlowGraphEdge[];
 }
 
+/** 图来源：preset=预置模型、user=用户新模型/克隆副本、new=空图、replay=回放（只读，来自 run 详情）。 */
+export type GraphSource = "preset" | "user" | "new" | "replay";
+
 export interface InferState {
   pending: boolean;
   byNode: Record<string, NodeInferInfo>;
@@ -30,7 +33,7 @@ interface GraphState {
   nodes: FlowGraphNode[];
   edges: FlowGraphEdge[];
   readOnly: boolean;
-  source: "preset" | "user" | "new";
+  source: GraphSource;
   dirty: boolean;
   clipboard: { nodes: FlowGraphNode[]; edges: FlowGraphEdge[] } | null;
   past: Snapshot[];
@@ -39,7 +42,7 @@ interface GraphState {
   infer: InferState;
   /** 整图被替换（load / 克隆）时自增，用于强制重新推导：这类替换会清空 infer，但结构签名可能不变。 */
   epoch: number;
-  load: (ir: GraphIR, options: { readOnly: boolean; source: "preset" | "user" | "new" }) => void;
+  load: (ir: GraphIR, options: { readOnly: boolean; source: GraphSource }) => void;
   toGraphIR: () => GraphIR;
   applyPositions: (nodes: FlowGraphNode[]) => void;
   addNode: (type: NodeType, position: { x: number; y: number }) => void;

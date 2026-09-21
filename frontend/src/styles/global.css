@@ -217,6 +217,17 @@ body {
   border-color: transparent;
 }
 
+/* 破坏性操作的二次确认按钮（删除 run / 清理全部历史） */
+.btn--danger {
+  color: #ffb4ae;
+  border-color: rgba(248, 81, 73, 0.45);
+  background: rgba(248, 81, 73, 0.1);
+}
+
+.btn--danger:hover:not(:disabled) {
+  border-color: var(--danger);
+}
+
 .btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -1455,6 +1466,53 @@ body {
   font-size: 11px;
 }
 
+/* M4：时间轴与游标（曲线与探针共用的 step 游标） */
+.charts__timeline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.charts__timeline-label {
+  font-size: 11.5px;
+  color: var(--faint);
+  flex: none;
+}
+
+.charts__timeline-range {
+  flex: 1;
+  min-width: 0;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.charts__timeline-readout {
+  flex: none;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: #f0c674;
+  white-space: nowrap;
+}
+
+.charts__timeline-readout--live {
+  color: var(--muted);
+}
+
+.charts__timeline-follow {
+  flex: none;
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+.lab-replay-exit {
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
 /* M2：历史 run */
 .runs {
   display: flex;
@@ -1535,8 +1593,22 @@ body {
 }
 
 .runs__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   font-size: 11px;
   color: var(--faint);
+}
+
+.runs__disk {
+  font-variant-numeric: tabular-nums;
+}
+
+.runs__footer-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
 }
 
 /* M3：探针层勾选（训练配置面板内） */

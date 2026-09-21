@@ -29,6 +29,9 @@
     "readOnly": "Read-only preset",
     "unsaved": "Unsaved changes",
     "cloneAsCopy": "Clone as copy",
+    "replayMode": "Replay {{run}}",
+    "exitReplay": "Exit replay",
+    "exitReplayHint": "Exit replay and return to the editable model view",
     "newGraph": "Blank model: add nodes from the left panel and connect them to start checking.",
     "presetGraph": "Presets are read-only; clone one to edit and train.",
     "loadError": "Failed to load the workbench",
@@ -127,6 +130,7 @@
       "picked": "{{n}} layer(s) selected",
       "hint": "Submitted with the next start; selecting none attaches no probes, which is the throughput baseline.",
       "lockedHint": "Probes are fixed while running: changes apply to the next run.",
+      "replayHint": "Replay: probes are listed from this run; exit replay to change them.",
       "kind": {
         "feature_grid": "Feature grid",
         "attention": "Attention",
@@ -162,7 +166,8 @@
       }
     },
     "chart": {
-      "source": "Curves for {{name}}",
+      "source": "Curves for {{name}} ({{run}})",
+      "sourceId": "Curves for {{run}}",
       "noSource": "No run selected: start training or pick a run in the history",
       "empty": "Waiting for metrics…",
       "legendToggle": "Click to hide or show this curve (⌘/Ctrl + click to isolate)",
@@ -176,10 +181,25 @@
       "empty": "No runs yet",
       "live": "live",
       "delete": "Delete",
+      "deleteConfirm": "Confirm delete",
+      "cancel": "Cancel",
+      "storage": "Disk {{size}}",
+      "clear": "Clear history",
+      "clearConfirm": "Delete {{n}} runs",
       "count": "{{total}} total · showing latest {{count}}",
       "finishedAt": "ended"
     },
-    "presetHint": "Presets are read-only: train directly, or clone a copy to edit."
+    "presetHint": "Presets are read-only: train directly, or clone a copy to edit.",
+    "replayNote": "Replay: charts, probes and graph come from this run; exit to train again.",
+    "replayLockedHint": "Replay: parameters and dataset are read-only, shown from this run.",
+    "timeline": {
+      "label": "Timeline",
+      "hint": "Drag the slider or click a chart to pin a step; probes follow the same cursor",
+      "latest": "Following latest step {{step}}",
+      "at": "Pinned at step {{step}}",
+      "follow": "Follow latest",
+      "followHint": "Clear the cursor and follow the latest step"
+    }
   },
   "device": {
     "loading": "Detecting",

@@ -29,6 +29,9 @@
     "readOnly": "只读预置",
     "unsaved": "有未保存修改",
     "cloneAsCopy": "克隆为副本",
+    "replayMode": "回放 {{run}}",
+    "exitReplay": "退出回放",
+    "exitReplayHint": "退出回放，回到该模型的可编辑视图",
     "newGraph": "空白模型：从左侧面板添加节点，连线后即开始试跑。",
     "presetGraph": "预置模型为只读；克隆为副本后可自由编辑并训练。",
     "loadError": "工作台加载失败",
@@ -127,6 +130,7 @@
       "picked": "已选 {{n}} 层",
       "hint": "勾选随下一次启动提交；全不勾 = 不挂探针，可作吞吐对照基线。",
       "lockedHint": "训练中不可改探针：改动会在下一个 run 生效。",
+      "replayHint": "回放中：探针列表来自该 run，退出回放后才可修改。",
       "kind": {
         "feature_grid": "特征图",
         "attention": "注意力",
@@ -162,7 +166,8 @@
       }
     },
     "chart": {
-      "source": "曲线来源：{{name}}",
+      "source": "曲线来源：{{name}}（{{run}}）",
+      "sourceId": "曲线来源：{{run}}",
       "noSource": "尚未选择 run：开始训练或点选右侧历史 run",
       "empty": "等待指标…",
       "legendToggle": "点击隐藏 / 显示该曲线（⌘/Ctrl + 点击只看它）",
@@ -176,10 +181,25 @@
       "empty": "还没有训练记录",
       "live": "进行中",
       "delete": "删除",
+      "deleteConfirm": "确认删除",
+      "cancel": "取消",
+      "storage": "占用 {{size}}",
+      "clear": "清理全部历史",
+      "clearConfirm": "确认清理 {{n}} 条",
       "count": "共 {{total}} 条，显示最近 {{count}} 条",
       "finishedAt": "结束"
     },
-    "presetHint": "预置模型只读：可直接训练；克隆为副本后可自由编辑。"
+    "presetHint": "预置模型只读：可直接训练；克隆为副本后可自由编辑。",
+    "replayNote": "回放中：曲线、探针与图结构来自该 run，退出回放后可继续训练。",
+    "replayLockedHint": "回放中：参数与数据集回显自该 run，不可修改。",
+    "timeline": {
+      "label": "时间轴",
+      "hint": "拖动滑块或点击曲线定位 step；探针与曲线共用这个游标",
+      "latest": "跟随最新 step {{step}}",
+      "at": "已定位 step {{step}}",
+      "follow": "跟随最新",
+      "followHint": "清除游标，回到跟随最新"
+    }
   },
   "device": {
     "loading": "检测中",

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { ReactFlowProvider } from "@xyflow/react";
 import { Allotment, type AllotmentHandle } from "allotment";
 import { useTranslation } from "react-i18next";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import { fetchModelDetail } from "../api/graph";
 import { AppHeader } from "../components/AppHeader";
@@ -23,6 +23,7 @@ import { RunControls } from "../panels/RunControls/RunControls";
 import { RunList } from "../panels/RunList/RunList";
 import { TrainingConfig } from "../panels/TrainingConfig/TrainingConfig";
 import { emptyGraph } from "../graph/ir";
+import type { GraphIR } from "../graph/ir";
 import { localizedText } from "../i18n/localized";
 import { useGraphStore } from "../stores/graphStore";
 import { useRunStore } from "../stores/runStore";
@@ -53,12 +54,18 @@ export default function LabPage() {
   const load = useGraphStore((state) => state.load);
   const cloneAsCopy = useGraphStore((state) => state.cloneAsCopy);
   const readOnly = useGraphStore((state) => state.readOnly);
+  const source = useGraphStore((state) => state.source);
   const dirty = useGraphStore((state) => state.dirty);
   const meta = useGraphStore((state) => state.meta);
   const refresh = useRunStore((state) => state.refresh);
   const applyConfigDefaults = useRunStore((state) => state.applyConfigDefaults);
   const applyProbeDefaults = useRunStore((state) => state.applyProbeDefaults);
   const setDataset = useRunStore((state) => state.setDataset);
+  const replay = useRunStore((state) => state.replay);
+  const replayLoading = useRunStore((state) => state.replayLoading);
+  const selectRun = useRunStore((state) => state.selectRun);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlRunId = searchParams.get("run");
   const panelLayout = usePanelLayoutState();
   const isHidden = panelLayout.isHidden;
   // 一列的面板全部收起时，整列一起收起，把宽度让给相邻列（docs/02 §9.2）
@@ -125,8 +132,58 @@ export default function LabPage() {
     void refresh();
   }, [refresh]);
 
+  // `?run=` 是回放状态的唯一真源（docs/02 §9.2「回放模式」）：带参打开即拉详情，
+  // 后退 / 手动清参退回非回放；同一参数只尝试一次，失败由下面的写 URL effect 移除无效参数。
+  // 判定值一律现读 store：同一提交里前面的 effect 可能刚改过 store，用渲染期闭包会拿旧值做决定。
+  const attemptedRun = useRef<string | null>(null);
+  useEffect(() => {
+    const state = useRunStore.getState();
+    if (urlRunId === null) {
+      attemptedRun.current = null;
+      if (state.replay) void selectRun(null);
+      return;
+    }
+    if (state.replay?.id === urlRunId || state.replayLoading) return;
+    if (attemptedRun.current === urlRunId) return;
+    attemptedRun.current = urlRunId;
+    void selectRun(urlRunId);
+  }, [urlRunId, replay, replayLoading, selectRun]);
+
+  // 反向同步：列表点选 / 自动选中最新 / 删除回放中的 run，都把 `?run=` 写回 URL
+  // （replace，不污染后退栈）；加载期间不写，否则会把刚打开的 URL 参数删掉。
+  useEffect(() => {
+    const state = useRunStore.getState();
+    if (state.replayLoading) return;
+    const activeRunId = state.replay?.id ?? null;
+    if (activeRunId === urlRunId) return;
+    const next = new URLSearchParams(searchParams);
+    if (activeRunId) next.set("run", activeRunId);
+    else next.delete("run");
+    setSearchParams(next, { replace: true });
+  }, [urlRunId, replay, replayLoading, searchParams, setSearchParams]);
+
+  const replayGraph = (replay?.graph ?? null) as GraphIR | null;
+
   useEffect(() => {
     let cancelled = false;
+    const state = useRunStore.getState();
+    if (state.replayLoading) {
+      // 回放加载中保持现状：首次进入停在加载态，切换回放时旧图继续显示，
+      // 避免与即将恢复的回放图互相覆盖
+      return () => {
+        cancelled = true;
+      };
+    }
+    const graph = (state.replay?.graph ?? null) as GraphIR | null;
+    if (graph) {
+      // 回放：图结构从 run 详情的 graph_json 恢复，只读（禁编辑 / 禁右键建节点 / 不显示克隆）
+      load(graph, { readOnly: true, source: "replay" });
+      setLoadError(null);
+      setStatus("ready");
+      return () => {
+        cancelled = true;
+      };
+    }
     setStatus("loading");
     setLoadError(null);
     if (graphId === "new") {
@@ -157,7 +214,7 @@ export default function LabPage() {
     return () => {
       cancelled = true;
     };
-  }, [graphId, load, applyConfigDefaults, applyProbeDefaults, setDataset]);
+  }, [graphId, replayGraph, replayLoading, load, applyConfigDefaults, applyProbeDefaults, setDataset]);
 
   useGraphInfer(status === "ready");
 
@@ -179,13 +236,29 @@ export default function LabPage() {
               {t("nav.backToLibrary")}
             </Link>
             <span className="app-header__title">{title}</span>
-            {readOnly ? <span className="badge badge--muted">{t("lab.readOnly")}</span> : null}
+            {readOnly ? (
+              <span className="badge badge--muted">
+                {source === "replay"
+                  ? t("lab.replayMode", { run: replay?.id ?? "" })
+                  : t("lab.readOnly")}
+              </span>
+            ) : null}
+            {source === "replay" ? (
+              <button
+                type="button"
+                className="btn btn--ghost lab-replay-exit"
+                onClick={() => void selectRun(null)}
+                title={t("lab.exitReplayHint")}
+              >
+                {t("lab.exitReplay")}
+              </button>
+            ) : null}
             {dirty && !readOnly ? <span className="badge badge--warn">{t("lab.unsaved")}</span> : null}
           </>
         }
         actions={
           <>
-            {readOnly ? (
+            {readOnly && source !== "replay" ? (
               <button type="button" className="btn btn--primary" onClick={clone}>
                 {t("lab.cloneAsCopy")}
               </button>

@@ -39,6 +39,9 @@ export function RunControls() {
   const localIssues = useGraphStore((state) => state.localIssues);
   const modelId = useGraphStore((state) => state.meta.id);
 
+  const replay = useRunStore((state) => state.replay);
+  const replaying = replay !== null;
+
   const running = isActiveStatus(status);
   const blocked = localIssues.some((issue) => issue.severity === "error") || inferErrors.length > 0;
   const dataset = datasets?.find((item) => item.id === datasetId) ?? null;
@@ -64,9 +67,17 @@ export function RunControls() {
         <button
           type="button"
           className="btn btn--primary"
-          disabled={running || starting || blocked}
+          disabled={running || starting || blocked || replaying}
           onClick={() => void start(useGraphStore.getState().toGraphIR(), graphSource === "preset" ? modelId : undefined)}
-          title={blocked ? t("run.blockedHint") : readOnly ? t("run.presetHint") : undefined}
+          title={
+            replaying
+              ? t("run.replayNote", { run: replay.id })
+              : blocked
+                ? t("run.blockedHint")
+                : readOnly
+                  ? t("run.presetHint")
+                  : undefined
+          }
         >
           {starting ? t("run.controls.starting") : t("run.controls.start")}
         </button>
@@ -122,6 +133,8 @@ export function RunControls() {
         <span className={`run-bar__note ${runError || startError ? "run-bar__note--error" : ""}`} title={runError?.detail}>
           {message}
         </span>
+      ) : replaying ? (
+        <span className="run-bar__note">{t("run.replayNote", { run: replay.id })}</span>
       ) : blocked ? (
         <span className="run-bar__note">{t("run.blockedHint")}</span>
       ) : readOnly ? (

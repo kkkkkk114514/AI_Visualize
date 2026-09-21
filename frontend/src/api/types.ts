@@ -141,6 +141,14 @@ export interface RunsResponse {
   total: number;
 }
 
+/** 历史占用统计（docs/02 §8.1）：run 目录之和，不含数据集缓存。 */
+export interface RunStorage {
+  run_count: number;
+  total_bytes: number;
+  by_run: Record<string, number>;
+  runs_dir: string;
+}
+
 export interface MetricSeries {
   steps: number[];
   values: number[];

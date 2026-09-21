@@ -6,6 +6,7 @@ import type {
   RunDetail,
   RunHyperparams,
   RunMetricsResponse,
+  RunStorage,
   RunSummary,
   RunsResponse,
 } from "./types";
@@ -54,4 +55,13 @@ export async function fetchRunMetrics(
 
 export async function deleteRun(runId: string): Promise<void> {
   await apiDelete(`/api/runs/${encodeURIComponent(runId)}`);
+}
+
+export async function fetchRunStorage(): Promise<RunStorage> {
+  return apiGet<RunStorage>("/api/runs/storage");
+}
+
+/** 清理全部历史（跳过活动 run）；返回删除条数与保留的活动 run。 */
+export async function clearRunHistory(): Promise<{ deleted: number; kept_active: string | null }> {
+  return apiDelete<{ deleted: number; kept_active: string | null }>("/api/runs");
 }
